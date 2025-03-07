@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Enhanced Browser Shooter – Impact Only</title>
+  <title>Enhanced Browser Shooter – Upgrades & UI</title>
   <style>
     body { margin: 0; overflow: hidden; background: #222; }
     #gameContainer { position: relative; width: 1280px; margin: 0 auto; }
@@ -34,6 +34,27 @@
       cursor: pointer;
       margin-top: 20px;
     }
+    /* Upgrade menu overlay */
+    #upgradeMenu {
+      display: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1280px;
+      height: 720px;
+      background: rgba(0, 0, 0, 0.9);
+      color: #fff;
+      font-family: sans-serif;
+      text-align: center;
+      padding-top: 100px;
+      z-index: 3;
+    }
+    #upgradeMenu button {
+      padding: 10px 20px;
+      font-size: 20px;
+      cursor: pointer;
+      margin: 10px;
+    }
   </style>
 </head>
 <body>
@@ -45,36 +66,48 @@
       </p>
       <p>
         <strong>Controls:</strong><br>
-        Click anywhere to shoot. Instead of visible bullets, you'll see a brief impact effect at the mouse position.<br>
-        If you click on an enemy, it will rapidly shake and disappear (simulate a quick death).<br>
-        Ammo is displayed as a bar (with numbers) in the top-left and reloads automatically.
+        Click anywhere to shoot. A brief impact effect appears at the click position.<br>
+        If the click is on an enemy, that enemy dies with a quick death effect (and you earn money).<br>
+        Each shot consumes ammo (displayed as a bar with numbers).<br>
+        Ammo reloads automatically when empty.
       </p>
       <p>
-        Enemies approach from the left, stop at your wall, and attack it with a punch-like animation.<br>
-        If your wall’s health reaches 0, it's game over.
+        Enemies approach from the left and, once they reach your wall, attack it with a punch-like animation.<br>
+        If your wall’s health reaches 0, it's game over.<br>
+        Earn money for each enemy kill, and after each day, purchase upgrades (for now, more ammo capacity).
       </p>
       <button id="startButton">Start Game</button>
+    </div>
+    <div id="upgradeMenu">
+      <h1>Upgrade Menu</h1>
+      <p id="moneyDisplay">Money: $0</p>
+      <button id="buyAmmoUpgrade">Buy Ammo Upgrade (+5 max ammo) - $50</button><br>
+      <button id="startNextDay">Start Next Day</button>
     </div>
     <canvas id="gameCanvas" width="1280" height="720"></canvas>
   </div>
   <script>
-    // Canvas and context
+    // Canvas setup
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
     const startScreen = document.getElementById("startScreen");
     const startButton = document.getElementById("startButton");
+    const upgradeMenu = document.getElementById("upgradeMenu");
+    const moneyDisplay = document.getElementById("moneyDisplay");
+    const buyAmmoUpgradeButton = document.getElementById("buyAmmoUpgrade");
+    const startNextDayButton = document.getElementById("startNextDay");
 
     // Constants for canvas size and padding
     const CANVAS_WIDTH = 1280;
     const CANVAS_HEIGHT = 720;
     const PADDING = 50;
 
-    // Game States: "menu", "transition", "running", "gameover", "win"
+    // Game states: "menu", "transition", "running", "upgrade", "gameover", "win"
     let gameState = "menu";
 
     // Define the player (positioned behind the wall; used only for ammo display now)
     const player = {
-      x: CANVAS_WIDTH - 150, // behind the wall
+      x: CANVAS_WIDTH - 150,
       y: CANVAS_HEIGHT / 2 - 40,
       width: 80,
       height: 80
@@ -82,16 +115,16 @@
 
     // Define the wall (in front of the player)
     const wall = {
-      x: CANVAS_WIDTH - 300, // wall is to the left of the player
+      x: CANVAS_WIDTH - 300,
       y: PADDING,
       width: 20,
       height: CANVAS_HEIGHT - 2 * PADDING,
       health: 100
     };
 
-    // Ammo settings (ammo bar displayed at top-left)
-    const maxAmmo = 10;
-    let ammo = maxAmmo;
+    // Ammo settings (ammo bar shown in top-left)
+    let playerMaxAmmo = 10; // Upgradable value.
+    let ammo = playerMaxAmmo;
     const reloadTime = 2000; // ms for full reload
     let isReloading = false;
     let reloadInterval = null;
@@ -100,9 +133,9 @@
     function autoReload() {
       if (ammo <= 0 && !isReloading) {
         isReloading = true;
-        const refillTime = reloadTime / maxAmmo;
+        const refillTime = reloadTime / playerMaxAmmo;
         reloadInterval = setInterval(() => {
-          if (ammo < maxAmmo) {
+          if (ammo < playerMaxAmmo) {
             ammo++;
           } else {
             clearInterval(reloadInterval);
@@ -118,27 +151,30 @@
       shakeTime = 300; // ms
     }
 
+    // Money system
+    let money = 0;
+
     // Day/Wave system
     let day = 1;
     const maxDays = 5;
     let enemiesToSpawn = day * 5;
     let enemiesSpawned = 0;
-    let transitionTimer = 0;  // ms for day transition
+    let transitionTimer = 0; // ms for day transition
     const transitionDuration = 2000; // ms
     let transitionMessage = "";
 
-    // Function: count remaining enemies (to spawn + currently alive)
+    // Function: count remaining enemies (to spawn + alive)
     function enemiesRemaining() {
       return (enemiesToSpawn - enemiesSpawned) + enemies.length;
     }
 
-    // Arrays for enemies and impact effects (no bullets now)
+    // Arrays for enemies and impact effects (no bullets)
     let enemies = [];
     let impacts = [];
 
     // Impact effect settings
     const impactDuration = 300; // ms
-    // Each impact has x, y, initial radius, max radius, and remaining time
+    // Each impact effect: x, y, initial radius, max radius, duration, remainingTime
 
     // Enemy settings
     const enemySpeed = 0.8;
@@ -157,8 +193,24 @@
       startTransition();
     });
 
-    // Shooting: when clicking, produce an impact effect at the mouse position.
-    // Also, if click is inside an enemy's bounds, mark that enemy as dying.
+    // Upgrade menu event listeners
+    buyAmmoUpgradeButton.addEventListener("click", () => {
+      // Upgrade: increase max ammo by 5 for $50
+      if (money >= 50) {
+        money -= 50;
+        playerMaxAmmo += 5;
+        moneyDisplay.textContent = "Money: $" + money;
+      }
+    });
+    startNextDayButton.addEventListener("click", () => {
+      upgradeMenu.style.display = "none";
+      // Increment day and start new transition.
+      day++;
+      startTransition();
+    });
+
+    // Shooting: when clicking, create an impact effect at the mouse.
+    // If the click falls on an enemy, mark that enemy as dying.
     canvas.addEventListener("click", (e) => {
       if (gameState !== "running") return;
       if (isReloading || ammo <= 0) {
@@ -181,26 +233,17 @@
       if (hitEnemy) {
         hitEnemy.dying = true;
         hitEnemy.deathTimer = deathDuration;
-        // Impact effect at enemy center.
-        impacts.push({
-          x: hitEnemy.x + hitEnemy.width / 2,
-          y: hitEnemy.y + hitEnemy.height / 2,
-          radius: 5,
-          maxRadius: 20,
-          duration: impactDuration,
-          remainingTime: impactDuration
-        });
-      } else {
-        // Impact effect at mouse click position.
-        impacts.push({
-          x: mouseX,
-          y: mouseY,
-          radius: 5,
-          maxRadius: 20,
-          duration: impactDuration,
-          remainingTime: impactDuration
-        });
+        money += 10; // Award money per kill.
       }
+      // Create impact effect at click position.
+      impacts.push({
+        x: mouseX,
+        y: mouseY,
+        radius: 5,
+        maxRadius: 20,
+        duration: impactDuration,
+        remainingTime: impactDuration
+      });
       ammo--;
     });
 
@@ -257,7 +300,7 @@
     function update(deltaTime) {
       if (gameState === "running") {
         autoReload();
-        
+
         // Spawn enemies.
         if (enemiesSpawned < enemiesToSpawn) {
           if (Date.now() - lastEnemySpawn > 1500) {
@@ -265,7 +308,7 @@
             lastEnemySpawn = Date.now();
           }
         }
-        
+
         // Update enemies.
         enemies.forEach((enemy, index) => {
           if (enemy.dying) {
@@ -290,12 +333,13 @@
             }
           }
         });
-        
-        // Advance day if wave is cleared.
+
+        // Advance to upgrade menu if wave is cleared.
         if (enemies.length === 0 && enemiesSpawned >= enemiesToSpawn) {
           if (day < maxDays) {
-            day++;
-            startTransition();
+            gameState = "upgrade";
+            moneyDisplay.textContent = "Money: $" + money;
+            upgradeMenu.style.display = "block";
           } else {
             gameState = "win";
           }
@@ -304,31 +348,31 @@
         transitionTimer -= deltaTime;
         if (transitionTimer <= 0) {
           gameState = "running";
-          ammo = maxAmmo;
+          ammo = playerMaxAmmo;
         }
       }
-      
+
       if (shakeTime > 0) {
         shakeTime -= deltaTime;
         if (shakeTime < 0) shakeTime = 0;
       }
-      
+
       if (wall.health <= 0) {
         gameState = "gameover";
       }
-      
+
       updateImpacts(deltaTime);
     }
 
-    // Draw all game elements.
+    // Draw game elements and UI.
     function draw() {
       ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-      if (gameState === "running" || gameState === "transition") {
-        // Draw the player behind the wall.
+      if (gameState === "running" || gameState === "transition" || gameState === "upgrade") {
+        // Draw the player (for ammo display) behind the wall.
         ctx.fillStyle = "#00AA00";
         ctx.fillRect(player.x, player.y, player.width, player.height);
-
+        
         // Draw the wall.
         ctx.fillStyle = "#006400";
         ctx.fillRect(wall.x, wall.y, wall.width, wall.height);
@@ -336,7 +380,7 @@
         ctx.font = "18px sans-serif";
         ctx.textAlign = "center";
         ctx.fillText("Wall Health: " + Math.max(0, Math.floor(wall.health)), wall.x + wall.width / 2, wall.y - 10);
-
+        
         // Draw enemies.
         enemies.forEach(enemy => {
           ctx.save();
@@ -357,33 +401,55 @@
           }
           ctx.restore();
         });
-
+        
         // Draw impact effects.
         drawImpacts();
+        
+        // -- AMMO BAR SETTINGS --
+const ammoBarWidth = 200;
+const ammoBarHeight = 30;
+const ammoBarX = 20;    // left margin
+const ammoBarY = 20;    // top margin
 
-        // Draw Ammo Bar (top-left) with overlaid numbers.
-        const ammoBarWidth = 200;
-        const ammoBarHeight = 30;
-        const ammoX = 20;
-        const ammoY = 40;
-        ctx.strokeStyle = "#FFFFFF";
-        ctx.strokeRect(ammoX, ammoY, ammoBarWidth, ammoBarHeight);
-        const ammoFillWidth = (ammo / maxAmmo) * ammoBarWidth;
-        ctx.fillStyle = "#00FF00";
-        ctx.fillRect(ammoX, ammoY, ammoFillWidth, ammoBarHeight);
-        ctx.fillStyle = "#000000";
-        ctx.font = "20px sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText(ammo + " / " + maxAmmo, ammoX + ammoBarWidth / 2, ammoY + ammoBarHeight - 5);
+// Draw ammo bar outline
+ctx.strokeStyle = "#FFFFFF";
+ctx.strokeRect(ammoBarX, ammoBarY, ammoBarWidth, ammoBarHeight);
 
-        // Draw additional UI text.
-        ctx.fillStyle = "#FFFFFF";
-        ctx.font = "18px sans-serif";
-        ctx.textAlign = "left";
-        ctx.fillText("Day: " + day + " / " + maxDays, 20, 80);
-        ctx.fillText("Enemies Remaining: " + enemiesRemaining(), 20, 110);
+// Fill proportionally
+const ammoFillWidth = (ammo / playerMaxAmmo) * ammoBarWidth;
+ctx.fillStyle = "#00FF00";
+ctx.fillRect(ammoBarX, ammoBarY, ammoFillWidth, ammoBarHeight);
+
+// Overlay ammo text
+ctx.fillStyle = "#000000";
+ctx.font = "20px sans-serif";
+ctx.textAlign = "center";
+ctx.fillText(
+  ammo + " / " + playerMaxAmmo,
+  ammoBarX + ammoBarWidth / 2,
+  ammoBarY + ammoBarHeight - 5
+);
+
+// -- TEXT BELOW THE AMMO BAR --
+// We'll place each line ~25 pixels below the previous line
+let textY = ammoBarY + ammoBarHeight + 30; // start a bit below the ammo bar
+
+ctx.fillStyle = "#FFFFFF";
+ctx.font = "18px sans-serif";
+ctx.textAlign = "left";
+
+// Money
+ctx.fillText("Money: $" + money, ammoBarX, textY);
+
+// Day
+textY += 25;
+ctx.fillText("Day: " + day + " / " + maxDays, ammoBarX, textY);
+
+// Enemies Remaining
+textY += 25;
+ctx.fillText("Enemies Remaining: " + enemiesRemaining(), ammoBarX, textY);
       }
-
+      
       if (gameState === "transition") {
         ctx.fillStyle = "rgba(0,0,0,0.8)";
         ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -392,7 +458,7 @@
         ctx.textAlign = "center";
         ctx.fillText(transitionMessage, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
       }
-
+      
       if (gameState === "gameover") {
         ctx.fillStyle = "#FF0000";
         ctx.font = "40px sans-serif";
