@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>RE4 Inventory – Drag, Rotate, Center & Auto Sort</title>
+  <style>
+    body {
+      background-color: #222;
+      color: #eee;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+    h1 {
+      margin-bottom: 10px;
+    }
+    p {
+      font-size: 14px;
+    }
+    /* Inventory grid container */
+    .inventory {
+      position: relative;
+      width: 400px;  /* 10 cells × 40px */
+      height: 400px; /* 10 cells × 40px */
+      border: 2px solid #555;
+      background-color: #333;
+      background-image: 
+        linear-gradient(to right, #444 1px, transparent 1px),
+        linear-gradient(to bottom, #444 1px, transparent 1px);
+      background-size: 40px 40px;
+      margin-top: 10px;
+    }
+    /* The overall item container – pointer events disabled so only visible cells respond */
+    .item {
+      position: absolute;
+      pointer-events: none;
+      z-index: 1;
+    }
+    .item.dragging {
+      opacity: 0.7;
+    }
+    /* Interactive cell (visible portion of the item). These cells have no inner borders. */
+    .item-cell {
+      position: absolute;
+      width: 40px;
+      height: 40px;
+      background-color: #a33;
+      pointer-events: auto;
+      user-select: none;
+    }
+    /* The outline overlay – drawn as an SVG */
+    .item-outline {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      overflow: visible;
+    }
+    /* Auto Sort Button */
+    #sortButton {
+      margin-top: 10px;
+      padding: 8px 16px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>Resident Evil–Style Inventory</h1>
+  <p>
+    Drag an item and press <strong>R</strong> during drag to rotate it. The item will remain centered under the cursor.  
+    When dropping an item, if the space is already occupied the item will revert to its original spot.
+  </p>
+  <button id="sortButton">Auto Sort</button>
+  <div class="inventory" id="inventory"></div>
+
+  <script>
+    // Grid settings
+    const GRID_SIZE = 10; // 10×10 grid
+    const CELL_SIZE = 40; // each cell is 40px
+    const inventoryEl = document.getElementById('inventory');
+
+    // Global variables for dragging.
+    let currentDraggedItem = null;
+    let currentOffsetX = 0;
+    let currentOffsetY = 0;
+    // Save the original grid coordinates before a drag.
+    let originalX = 0, originalY = 0;
+    // Track current mouse position (used during rotation).
+    let currentMouseX = 0;
+    let currentMouseY = 0;
+
+    // Helper: Generate rectangular shape cells (list of offsets) for a given width and height.
+    function generateRectangularShape(w, h) {
+      const shape = [];
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          shape.push({ x, y });
+        }
+      }
+      return shape;
+    }
+
+    // Helper: Given a shape (list of cell offsets) and a base coordinate, return the occupied grid cells.
+    function getOccupiedCells(item, baseX, baseY, shape) {
+      return shape.map(offset => ({ x: baseX + offset.x, y: baseY + offset.y }));
+    }
+
+    // Helper: Determine the bounding box (width and height in cells) of a shape.
+    function getShapeBoundingBox(shape) {
+      const xs = shape.map(c => c.x);
+      const ys = shape.map(c => c.y);
+      return {
+        w: Math.max(...xs) + 1,
+        h: Math.max(...ys) + 1
+      };
+    }
+
+    // Helper: Rotate a shape 90° clockwise.
+    function rotateShape(shape) {
+      const rotated = shape.map(c => ({ x: c.y, y: -c.x }));
+      const minX = Math.min(...rotated.map(c => c.x));
+      const minY = Math.min(...rotated.map(c => c.y));
+      return rotated.map(c => ({ x: c.x - minX, y: c.y - minY }));
+    }
+
+    // Helper: Check if an item is completely within grid boundaries.
+    function isFullyInGrid(item) {
+      const occupied = getOccupiedCells(item, item.x, item.y, item.shape);
+      return occupied.every(cell => cell.x >= 0 && cell.y >= 0 && cell.x < GRID_SIZE && cell.y < GRID_SIZE);
+    }
+
+    // Check if an item with a given shape placed at newX, newY is within bounds and not colliding.
+    function isValidPosition(item, newX, newY, newShape) {
+      const occupied = getOccupiedCells(item, newX, newY, newShape);
+      // Check boundaries.
+      for (let cell of occupied) {
+        if (cell.x < 0 || cell.y < 0 || cell.x >= GRID_SIZE || cell.y >= GRID_SIZE) {
+          return false;
+        }
+      }
+      // Check for collisions with other items.
+      for (let other of items) {
+        if (other.id === item.id) continue;
+        const otherOccupied = getOccupiedCells(other, other.x, other.y, other.shape);
+        for (let cell of occupied) {
+          if (otherOccupied.some(oCell => oCell.x === cell.x && oCell.y === cell.y)) {
+            return false;
+          }
+        }
+      }
+      return true;
+    }
+
+    // Compute and render the outline for an item.
+    // For each cell in the shape, we draw a line for any side that is not adjacent to another cell.
+    function renderOutline(item) {
+      // Remove any existing SVG.
+      const existingSvg = item.el.querySelector('.item-outline');
+      if (existingSvg) existingSvg.remove();
+
+      const bbox = getShapeBoundingBox(item.shape);
+      const svgNS = "http://www.w3.org/2000/svg";
+      const svg = document.createElementNS(svgNS, 'svg');
+      svg.classList.add('item-outline');
+      svg.setAttribute('width', bbox.w * CELL_SIZE);
+      svg.setAttribute('height', bbox.h * CELL_SIZE);
+
+      // Build a lookup set for the shape cells.
+      const cellSet = new Set(item.shape.map(c => `${c.x},${c.y}`));
+
+      // Helper to check if a neighbor exists.
+      function hasNeighbor(x, y) {
+        return cellSet.has(`${x},${y}`);
+      }
+
+      // For each cell, draw an edge if no neighbor exists in that direction.
+      item.shape.forEach(cell => {
+        const x = cell.x * CELL_SIZE;
+        const y = cell.y * CELL_SIZE;
+        // Top edge.
+        if (!hasNeighbor(cell.x, cell.y - 1)) {
+          const line = document.createElementNS(svgNS, 'line');
+          line.setAttribute('x1', x);
+          line.setAttribute('y1', y);
+          line.setAttribute('x2', x + CELL_SIZE);
+          line.setAttribute('y2', y);
+          line.setAttribute('stroke', 'yellow');
+          line.setAttribute('stroke-width', 2);
+          svg.appendChild(line);
+        }
+        // Right edge.
+        if (!hasNeighbor(cell.x + 1, cell.y)) {
+          const line = document.createElementNS(svgNS, 'line');
+          line.setAttribute('x1', x + CELL_SIZE);
+          line.setAttribute('y1', y);
+          line.setAttribute('x2', x + CELL_SIZE);
+          line.setAttribute('y2', y + CELL_SIZE);
+          line.setAttribute('stroke', 'yellow');
+          line.setAttribute('stroke-width', 2);
+          svg.appendChild(line);
+        }
+        // Bottom edge.
+        if (!hasNeighbor(cell.x, cell.y + 1)) {
+          const line = document.createElementNS(svgNS, 'line');
+          line.setAttribute('x1', x + CELL_SIZE);
+          line.setAttribute('y1', y + CELL_SIZE);
+          line.setAttribute('x2', x);
+          line.setAttribute('y2', y + CELL_SIZE);
+          line.setAttribute('stroke', 'yellow');
+          line.setAttribute('stroke-width', 2);
+          svg.appendChild(line);
+        }
+        // Left edge.
+        if (!hasNeighbor(cell.x - 1, cell.y)) {
+          const line = document.createElementNS(svgNS, 'line');
+          line.setAttribute('x1', x);
+          line.setAttribute('y1', y + CELL_SIZE);
+          line.setAttribute('x2', x);
+          line.setAttribute('y2', y);
+          line.setAttribute('stroke', 'yellow');
+          line.setAttribute('stroke-width', 2);
+          svg.appendChild(line);
+        }
+      });
+      // Append the outline SVG to the item container.
+      item.el.appendChild(svg);
+    }
+
+    // InventoryItem constructor.
+    // If no customShape is provided, a rectangular shape is generated from w and h.
+    function InventoryItem(id, x, y, w, h, label, customShape) {
+      this.id = id;
+      this.x = x; // grid coordinate x
+      this.y = y; // grid coordinate y
+      this.w = w; // used for rectangular items (if no custom shape)
+      this.h = h;
+      this.label = label;
+      this.shape = customShape || generateRectangularShape(w, h);
+      this.el = document.createElement('div');
+      this.el.classList.add('item');
+      this.el.dataset.id = id;
+      // Render interactive cells and the outline.
+      this.renderCells();
+      updateItemPosition(this);
+      inventoryEl.appendChild(this.el);
+    }
+
+    // Render the interactive cells (for pointer events) and the outline.
+    InventoryItem.prototype.renderCells = function() {
+      this.el.innerHTML = ""; // clear any previous content
+      const bbox = getShapeBoundingBox(this.shape);
+      // Set the container size based on the bounding box.
+      this.el.style.width = (bbox.w * CELL_SIZE) + 'px';
+      this.el.style.height = (bbox.h * CELL_SIZE) + 'px';
+      // For each cell in the shape, create a cell element.
+      this.shape.forEach((offset, index) => {
+        const cell = document.createElement('div');
+        cell.classList.add('item-cell');
+        cell.style.left = (offset.x * CELL_SIZE) + 'px';
+        cell.style.top = (offset.y * CELL_SIZE) + 'px';
+        // Optionally, display the label on the first cell.
+        if (index === 0) {
+          cell.textContent = this.label;
+          cell.style.textAlign = "center";
+          cell.style.lineHeight = CELL_SIZE + "px";
+          cell.style.fontSize = "12px";
+        }
+        attachDragAndRotation(cell, this);
+        this.el.appendChild(cell);
+      });
+      // Render the outline.
+      renderOutline(this);
+    };
+
+    // Update the CSS position based on grid coordinates (snapped to the nearest cell).
+    function updateItemPosition(item) {
+      item.el.style.left = (Math.round(item.x) * CELL_SIZE) + 'px';
+      item.el.style.top = (Math.round(item.y) * CELL_SIZE) + 'px';
+    }
+
+    // Attach drag event listener to a cell.
+    function attachDragAndRotation(cell, item) {
+      cell.addEventListener('mousedown', (e) => {
+        currentDraggedItem = item;
+        // Save the original grid coordinates.
+        originalX = item.x;
+        originalY = item.y;
+        const rect = item.el.getBoundingClientRect();
+        currentOffsetX = e.clientX - rect.left;
+        currentOffsetY = e.clientY - rect.top;
+        item.el.classList.add('dragging');
+        item.el.style.zIndex = 1000;
+        e.preventDefault();
+      });
+    }
+
+    // Global mousemove and mouseup for dragging.
+    document.addEventListener('mousemove', (e) => {
+      currentMouseX = e.clientX;
+      currentMouseY = e.clientY;
+      if (!currentDraggedItem) return;
+      const containerRect = inventoryEl.getBoundingClientRect();
+      let newLeft = e.clientX - containerRect.left - currentOffsetX;
+      let newTop = e.clientY - containerRect.top - currentOffsetY;
+      currentDraggedItem.el.style.left = newLeft + 'px';
+      currentDraggedItem.el.style.top = newTop + 'px';
+    });
+
+    document.addEventListener('mouseup', (e) => {
+      if (!currentDraggedItem) return;
+      const containerRect = inventoryEl.getBoundingClientRect();
+      let newLeft = e.clientX - containerRect.left - currentOffsetX;
+      let newTop = e.clientY - containerRect.top - currentOffsetY;
+      let newGridX = Math.round(newLeft / CELL_SIZE);
+      let newGridY = Math.round(newTop / CELL_SIZE);
+      // If the new position is valid, update the item's grid coordinates.
+      if (isValidPosition(currentDraggedItem, newGridX, newGridY, currentDraggedItem.shape)) {
+        currentDraggedItem.x = newGridX;
+        currentDraggedItem.y = newGridY;
+      } else {
+        // Otherwise, revert to the original position.
+        currentDraggedItem.x = originalX;
+        currentDraggedItem.y = originalY;
+      }
+      updateItemPosition(currentDraggedItem);
+      currentDraggedItem.el.classList.remove('dragging');
+      currentDraggedItem.el.style.zIndex = '';
+      currentDraggedItem = null;
+    });
+
+    // While dragging, if the R key is pressed, rotate the current dragged item.
+    // The item will re-center so that the cursor remains at its center.
+    document.addEventListener('keydown', (e) => {
+      if (!currentDraggedItem) return;
+      if (e.key.toLowerCase() === 'r') {
+        const rotatedShape = rotateShape(currentDraggedItem.shape);
+        // Allow rotation if the new shape is valid at the current position or if the item is already partially outside the grid.
+        if (isValidPosition(currentDraggedItem, currentDraggedItem.x, currentDraggedItem.y, rotatedShape) ||
+            !isFullyInGrid(currentDraggedItem)) {
+          currentDraggedItem.shape = rotatedShape;
+          currentDraggedItem.renderCells();
+          const bbox = getShapeBoundingBox(currentDraggedItem.shape);
+          const newWidth = bbox.w * CELL_SIZE;
+          const newHeight = bbox.h * CELL_SIZE;
+          // Recompute the offset so that the cursor stays at the center.
+          currentOffsetX = newWidth / 2;
+          currentOffsetY = newHeight / 2;
+          const containerRect = inventoryEl.getBoundingClientRect();
+          const newLeft = currentMouseX - containerRect.left - currentOffsetX;
+          const newTop = currentMouseY - containerRect.top - currentOffsetY;
+          // Update grid coordinates (fractional until mouseup snaps to grid).
+          currentDraggedItem.x = newLeft / CELL_SIZE;
+          currentDraggedItem.y = newTop / CELL_SIZE;
+          updateItemPosition(currentDraggedItem);
+        } else {
+          console.log("Rotation not allowed here.");
+        }
+      }
+    });
+
+    // Auto Sort: reposition all items into the top left of the grid.
+    function autoSort() {
+      let grid = Array.from({length: GRID_SIZE}, () => Array(GRID_SIZE).fill(0));
+      const sortedItems = items.slice().sort((a, b) => a.id - b.id);
+      sortedItems.forEach(item => {
+        let placed = false;
+        for (let y = 0; y < GRID_SIZE; y++) {
+          if (placed) break;
+          for (let x = 0; x < GRID_SIZE; x++) {
+            let canPlace = true;
+            for (let offset of item.shape) {
+              let cellX = x + offset.x;
+              let cellY = y + offset.y;
+              if (cellX < 0 || cellY < 0 || cellX >= GRID_SIZE || cellY >= GRID_SIZE || grid[cellY][cellX] !== 0) {
+                canPlace = false;
+                break;
+              }
+            }
+            if (canPlace) {
+              for (let offset of item.shape) {
+                grid[y + offset.y][x + offset.x] = item.id;
+              }
+              item.x = x;
+              item.y = y;
+              updateItemPosition(item);
+              placed = true;
+              break;
+            }
+          }
+        }
+      });
+    }
+
+    document.getElementById('sortButton').addEventListener('click', autoSort);
+
+    // Array to store all items.
+    const items = [];
+
+    // Create some demo items.
+    const item1 = new InventoryItem(1, 0, 0, 2, 2, "Item 1");  // 2×2 rectangle
+    items.push(item1);
+    const item2 = new InventoryItem(2, 3, 0, 3, 1, "Item 2");  // 3×1 rectangle
+    items.push(item2);
+    const item3 = new InventoryItem(3, 0, 3, 1, 3, "Item 3");  // 1×3 rectangle
+    items.push(item3);
+    const item4 = new InventoryItem(4, 5, 5, 2, 3, "Item 4");  // 2×3 rectangle
+    items.push(item4);
+    // Irregular item: L-shape defined by cells (0,0), (1,0) and (0,1).
+    const lShape = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }];
+    const item5 = new InventoryItem(5, 7, 2, 0, 0, "L-Item", lShape);
+    items.push(item5);
+  </script>
+</body>
+</html>

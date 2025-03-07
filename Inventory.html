@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Inventory System Demo</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+    }
+    /* Container holds left (inventory + hotbar) and right (container grid) */
+    #inventoryContainer {
+      display: flex;
+      gap: 20px;
+    }
+    .left-panel {
+      display: flex;
+      flex-direction: column;
+    }
+    /* Grid styles */
+    .grid.inventory {
+      display: grid;
+      grid-template-columns: repeat(4, 60px);
+      grid-gap: 5px;
+    }
+    .grid.hotbar {
+      display: grid;
+      grid-template-columns: repeat(5, 60px);
+      grid-gap: 5px;
+      margin-top: 10px;
+    }
+    .grid.container {
+      display: grid;
+      grid-template-columns: repeat(3, 60px);
+      grid-gap: 5px;
+    }
+    .slot {
+      width: 60px;
+      height: 60px;
+      border: 1px solid #aaa;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f9f9f9;
+      user-select: none;
+      cursor: pointer;
+      position: relative;
+    }
+    /* Floating drag element */
+    #draggingItem {
+      position: absolute;
+      pointer-events: none;
+      background: rgba(200,200,200,0.9);
+      border: 1px solid #333;
+      padding: 5px;
+      border-radius: 3px;
+      font-size: 14px;
+      z-index: 1000;
+    }
+    button {
+      margin-right: 10px;
+      padding: 5px 10px;
+    }
+  </style>
+</head>
+<body>
+  <h2>Inventory System Demo</h2>
+  <p>
+    Drag items between the grids. Hold <strong>Shift</strong> to drag only one item from a stack, or hold <strong>Ctrl</strong> to drag half of a stack.
+  </p>
+  <div style="margin-bottom: 10px;">
+    <button id="sortButton">Sort Items (Current: Name)</button>
+    <button id="autoStackButton">Auto Stack Items</button>
+    <button id="transferButton">Transfer Container to Inventory</button>
+  </div>
+  <div id="inventoryContainer">
+    <div class="left-panel">
+      <div id="inventoryGrid" class="grid inventory"></div>
+      <div id="hotbar" class="grid hotbar"></div>
+    </div>
+    <div id="itemContainer" class="grid container"></div>
+  </div>
+  <div id="draggingItem" style="display: none;"></div>
+  
+  <script>
+    const MAX_STACK = 5;
+    // Data arrays for each grid (using null for empty slots)
+    let inventory = new Array(16).fill(null);
+    // Pre-fill some inventory items with colored shapes
+    inventory[0] = { id: 'square', name: 'Square', count: 2, color: 'red' };
+    inventory[1] = { id: 'triangle', name: 'Triangle', count: 4, color: 'blue' };
+    inventory[2] = { id: 'circle', name: 'Circle', count: 1, color: 'green' };
+    inventory[3] = { id: 'hexagon', name: 'Hexagon', count: 3, color: 'purple' };
+
+    let hotbar = new Array(5).fill(null);
+    hotbar[0] = { id: 'square', name: 'Square', count: 5, color: 'red' };
+    hotbar[1] = { id: 'circle', name: 'Circle', count: 2, color: 'green' };
+
+    // Container now has 6 slots (2 extra added)
+    let containerSlots = new Array(6).fill(null);
+    containerSlots[0] = { id: 'square', name: 'Square', count: 3, color: 'red' };
+    containerSlots[1] = { id: 'triangle', name: 'Triangle', count: 2, color: 'blue' };
+    containerSlots[2] = { id: 'circle', name: 'Circle', count: 5, color: 'green' };
+    containerSlots[3] = { id: 'hexagon', name: 'Hexagon', count: 1, color: 'purple' };
+    // containerSlots[4] and containerSlots[5] remain empty
+
+    // Global variable to track dragging state
+    let dragging = null;
+
+    // Create an SVG element representing the item (shape with count)
+    function createItemElement(item) {
+      const svgNS = "http://www.w3.org/2000/svg";
+      const svg = document.createElementNS(svgNS, "svg");
+      svg.setAttribute("width", "50");
+      svg.setAttribute("height", "50");
+      let shape;
+      if(item.id === "square"){
+          shape = document.createElementNS(svgNS, "rect");
+          shape.setAttribute("x", "5");
+          shape.setAttribute("y", "5");
+          shape.setAttribute("width", "40");
+          shape.setAttribute("height", "40");
+          shape.setAttribute("fill", item.color);
+      } else if(item.id === "triangle"){
+          shape = document.createElementNS(svgNS, "polygon");
+          // Triangle: top center, bottom right, bottom left
+          shape.setAttribute("points", "25,5 45,45 5,45");
+          shape.setAttribute("fill", item.color);
+      } else if(item.id === "circle"){
+          shape = document.createElementNS(svgNS, "circle");
+          shape.setAttribute("cx", "25");
+          shape.setAttribute("cy", "25");
+          shape.setAttribute("r", "20");
+          shape.setAttribute("fill", item.color);
+      } else if(item.id === "hexagon"){
+          shape = document.createElementNS(svgNS, "polygon");
+          // Hexagon points in a 50x50 area
+          shape.setAttribute("points", "25,5 45,15 45,35 25,45 5,35 5,15");
+          shape.setAttribute("fill", item.color);
+      }
+      svg.appendChild(shape);
+      // Add text for the stack amount
+      const text = document.createElementNS(svgNS, "text");
+      text.setAttribute("x", "25");
+      text.setAttribute("y", "32"); // approximate center
+      text.setAttribute("text-anchor", "middle");
+      text.setAttribute("fill", "white");
+      text.setAttribute("font-size", "16");
+      text.setAttribute("font-family", "sans-serif");
+      text.textContent = item.count;
+      svg.appendChild(text);
+      return svg;
+    }
+
+    // Helper functions to get and set slot items based on type
+    function getItemFromSlot(type, index) {
+      if (type === 'inventory') return inventory[index];
+      if (type === 'hotbar') return hotbar[index];
+      if (type === 'container') return containerSlots[index];
+    }
+
+    function setItemToSlot(type, index, item) {
+      if (type === 'inventory') inventory[index] = item;
+      else if (type === 'hotbar') hotbar[index] = item;
+      else if (type === 'container') containerSlots[index] = item;
+    }
+
+    // Remove a number of items from a slot (or clear it if count reaches 0)
+    function removeItemsFromSlot(type, index, count) {
+      let item = getItemFromSlot(type, index);
+      if (item) {
+        if (item.count > count) {
+          item.count -= count;
+          setItemToSlot(type, index, item);
+        } else {
+          setItemToSlot(type, index, null);
+        }
+        renderAll();
+      }
+    }
+
+    // Render functions for each grid using SVG elements for items
+    function renderInventory() {
+      const inventoryGrid = document.getElementById('inventoryGrid');
+      inventoryGrid.innerHTML = '';
+      inventory.forEach((item, index) => {
+        const slot = document.createElement('div');
+        slot.className = 'slot';
+        slot.dataset.type = 'inventory';
+        slot.dataset.index = index;
+        if (item) {
+          slot.innerHTML = '';
+          slot.appendChild(createItemElement(item));
+        }
+        slot.addEventListener('mousedown', handleMouseDown);
+        inventoryGrid.appendChild(slot);
+      });
+    }
+
+    function renderHotbar() {
+      const hotbarGrid = document.getElementById('hotbar');
+      hotbarGrid.innerHTML = '';
+      hotbar.forEach((item, index) => {
+        const slot = document.createElement('div');
+        slot.className = 'slot';
+        slot.dataset.type = 'hotbar';
+        slot.dataset.index = index;
+        if (item) {
+          slot.innerHTML = '';
+          slot.appendChild(createItemElement(item));
+        }
+        slot.addEventListener('mousedown', handleMouseDown);
+        hotbarGrid.appendChild(slot);
+      });
+    }
+
+    function renderContainer() {
+      const containerGrid = document.getElementById('itemContainer');
+      containerGrid.innerHTML = '';
+      containerSlots.forEach((item, index) => {
+        const slot = document.createElement('div');
+        slot.className = 'slot';
+        slot.dataset.type = 'container';
+        slot.dataset.index = index;
+        if (item) {
+          slot.innerHTML = '';
+          slot.appendChild(createItemElement(item));
+        }
+        slot.addEventListener('mousedown', handleMouseDown);
+        containerGrid.appendChild(slot);
+      });
+    }
+
+    function renderAll() {
+      renderInventory();
+      renderHotbar();
+      renderContainer();
+    }
+
+    // Drag event handler.
+    // If Shift is held, pick up one item.
+    // If Ctrl is held, pick up half of the stack (at least one).
+    // Otherwise, pick up the entire stack.
+    function handleMouseDown(e) {
+      const slotElem = e.currentTarget;
+      const type = slotElem.dataset.type;
+      const index = parseInt(slotElem.dataset.index);
+      let item = getItemFromSlot(type, index);
+      if (!item) return; // nothing to pick up
+
+      let dragCount;
+      if (e.shiftKey) {
+        dragCount = 1;
+      } else if (e.ctrlKey) {
+        dragCount = Math.floor(item.count / 2);
+        if(dragCount < 1) dragCount = 1;
+      } else {
+        dragCount = item.count;
+      }
+      dragging = { source: { type, index }, item, dragCount };
+      removeItemsFromSlot(type, index, dragCount);
+      initiateDrag(e, item, dragCount);
+    }
+
+    // Initiates the drag by displaying the floating element centered on the cursor.
+    function initiateDrag(e, item, count) {
+      const draggingElem = document.getElementById('draggingItem');
+      draggingElem.style.display = 'block';
+      // Center the element on the mouse (the SVG is 50x50, so subtract 25)
+      draggingElem.style.left = (e.pageX - 25) + 'px';
+      draggingElem.style.top = (e.pageY - 25) + 'px';
+      draggingElem.innerHTML = '';
+      draggingElem.appendChild(createItemElement({ id: item.id, name: item.name, count: count, color: item.color }));
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    function handleMouseMove(e) {
+      const draggingElem = document.getElementById('draggingItem');
+      draggingElem.style.left = (e.pageX - 25) + 'px';
+      draggingElem.style.top = (e.pageY - 25) + 'px';
+    }
+
+    function handleMouseUp(e) {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      const draggingElem = document.getElementById('draggingItem');
+      draggingElem.style.display = 'none';
+
+      // Determine which slot (if any) we dropped onto
+      const dropElem = document.elementFromPoint(e.clientX, e.clientY);
+      const targetSlot = dropElem ? dropElem.closest('.slot') : null;
+
+      if (targetSlot && targetSlot.dataset.type && targetSlot.dataset.index !== undefined) {
+        const targetType = targetSlot.dataset.type;
+        const targetIndex = parseInt(targetSlot.dataset.index);
+
+        // If dropped on the same slot as where we started, return the dragged items
+        if (targetType === dragging.source.type && targetIndex === dragging.source.index) {
+          let current = getItemFromSlot(dragging.source.type, dragging.source.index);
+          if (current && current.id === dragging.item.id) {
+            current.count += dragging.dragCount;
+            if (current.count > MAX_STACK) current.count = MAX_STACK;
+            setItemToSlot(dragging.source.type, dragging.source.index, current);
+          } else {
+            setItemToSlot(dragging.source.type, dragging.source.index, { id: dragging.item.id, name: dragging.item.name, count: dragging.dragCount, color: dragging.item.color });
+          }
+        } else {
+          const targetItem = getItemFromSlot(targetType, targetIndex);
+          // If target is empty, place the dragged item there
+          if (!targetItem) {
+            setItemToSlot(targetType, targetIndex, { id: dragging.item.id, name: dragging.item.name, count: dragging.dragCount, color: dragging.item.color });
+          }
+          // If target holds the same item, combine stacks up to MAX_STACK
+          else if (targetItem.id === dragging.item.id) {
+            const total = targetItem.count + dragging.dragCount;
+            if (total <= MAX_STACK) {
+              targetItem.count = total;
+              setItemToSlot(targetType, targetIndex, targetItem);
+            } else {
+              const allowed = MAX_STACK - targetItem.count;
+              targetItem.count = MAX_STACK;
+              setItemToSlot(targetType, targetIndex, targetItem);
+              const remainder = dragging.dragCount - allowed;
+              let sourceCurrent = getItemFromSlot(dragging.source.type, dragging.source.index);
+              if (sourceCurrent && sourceCurrent.id === dragging.item.id) {
+                sourceCurrent.count += remainder;
+                if (sourceCurrent.count > MAX_STACK) sourceCurrent.count = MAX_STACK;
+                setItemToSlot(dragging.source.type, dragging.source.index, sourceCurrent);
+              } else {
+                setItemToSlot(dragging.source.type, dragging.source.index, { id: dragging.item.id, name: dragging.item.name, count: remainder, color: dragging.item.color });
+              }
+            }
+          }
+          // If target has a different item, swap the two
+          else {
+            const sourceItem = { id: dragging.item.id, name: dragging.item.name, count: dragging.dragCount, color: dragging.item.color };
+            const targetItemCopy = targetItem;
+            setItemToSlot(targetType, targetIndex, sourceItem);
+            setItemToSlot(dragging.source.type, dragging.source.index, targetItemCopy);
+          }
+        }
+      }
+      // If dropped outside any valid slot, return the dragged items to the source slot
+      else {
+        let sourceCurrent = getItemFromSlot(dragging.source.type, dragging.source.index);
+        if (sourceCurrent && sourceCurrent.id === dragging.item.id) {
+          sourceCurrent.count += dragging.dragCount;
+          if (sourceCurrent.count > MAX_STACK) sourceCurrent.count = MAX_STACK;
+          setItemToSlot(dragging.source.type, dragging.source.index, sourceCurrent);
+        } else {
+          setItemToSlot(dragging.source.type, dragging.source.index, { id: dragging.item.id, name: dragging.item.name, count: dragging.dragCount, color: dragging.item.color });
+        }
+      }
+      renderAll();
+      dragging = null;
+    }
+
+    // Sorting function: sorts a grid's non-null items then refills with null values
+    function sortGrid(gridArray, criteria) {
+      let items = gridArray.filter(item => item !== null);
+      if(criteria === "name"){
+        items.sort((a, b) => a.name.localeCompare(b.name));
+      } else if(criteria === "amount"){
+        items.sort((a, b) => a.count - b.count);
+      }
+      let newArray = new Array(gridArray.length).fill(null);
+      for(let i = 0; i < items.length; i++){
+        newArray[i] = items[i];
+      }
+      return newArray;
+    }
+
+    // Auto stack function: for each grid, merge same items into the first occurrence until full (MAX_STACK)
+    function autoStackGrid(gridArray) {
+      for(let i = 0; i < gridArray.length; i++){
+        let baseItem = gridArray[i];
+        if(baseItem){
+          for(let j = i + 1; j < gridArray.length; j++){
+            let compItem = gridArray[j];
+            if(compItem && compItem.id === baseItem.id){
+              let available = MAX_STACK - baseItem.count;
+              if(available > 0){
+                let transfer = Math.min(available, compItem.count);
+                baseItem.count += transfer;
+                compItem.count -= transfer;
+                if(compItem.count <= 0) {
+                  gridArray[j] = null;
+                }
+              }
+            }
+          }
+        }
+      }
+      return gridArray;
+    }
+
+    // Auto Transfer: move items from container to inventory, merging with same items where possible.
+    function autoTransferContainer() {
+      // Process each container slot
+      for(let i = 0; i < containerSlots.length; i++){
+        let containerItem = containerSlots[i];
+        if(containerItem){
+          let remaining = containerItem.count;
+          // First try to merge with same items in inventory that are not full.
+          for(let j = 0; j < inventory.length; j++){
+            let invItem = inventory[j];
+            if(invItem && invItem.id === containerItem.id && invItem.count < MAX_STACK){
+              let available = MAX_STACK - invItem.count;
+              let transfer = Math.min(available, remaining);
+              invItem.count += transfer;
+              remaining -= transfer;
+              if(remaining <= 0) break;
+            }
+          }
+          // Next, try to place remaining items in empty inventory slots.
+          if(remaining > 0){
+            for(let j = 0; j < inventory.length; j++){
+              if(inventory[j] === null){
+                let toPlace = Math.min(remaining, MAX_STACK);
+                inventory[j] = { id: containerItem.id, name: containerItem.name, count: toPlace, color: containerItem.color };
+                remaining -= toPlace;
+                if(remaining <= 0) break;
+              }
+            }
+          }
+          // Update container slot based on remaining items.
+          if(remaining <= 0){
+            containerSlots[i] = null;
+          } else {
+            containerSlots[i].count = remaining;
+          }
+        }
+      }
+      renderAll();
+    }
+
+    // Button event listeners
+
+    // Sorting button toggles between sorting by name and amount.
+    let sortMode = "name";
+    document.getElementById("sortButton").addEventListener("click", () => {
+      inventory = sortGrid(inventory, sortMode);
+      hotbar = sortGrid(hotbar, sortMode);
+      containerSlots = sortGrid(containerSlots, sortMode);
+      renderAll();
+      sortMode = (sortMode === "name" ? "amount" : "name");
+      document.getElementById("sortButton").textContent = `Sort Items (Current: ${sortMode.charAt(0).toUpperCase() + sortMode.slice(1)})`;
+    });
+
+    // Auto Stack button
+    document.getElementById("autoStackButton").addEventListener("click", () => {
+      inventory = autoStackGrid(inventory);
+      hotbar = autoStackGrid(hotbar);
+      containerSlots = autoStackGrid(containerSlots);
+      renderAll();
+    });
+
+    // Transfer Container button
+    document.getElementById("transferButton").addEventListener("click", () => {
+      autoTransferContainer();
+    });
+
+    // Initial render
+    renderAll();
+  </script>
+</body>
+</html>

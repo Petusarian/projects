@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Configurable Tug of War Game</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      background: #f0f0f0;
+    }
+    /* Container holds the game area and side menu */
+    #container {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      margin: 20px;
+    }
+    /* Game area styling */
+    #game {
+      position: relative;
+      width: 800px;
+      height: 400px;
+      background: #eef;
+      border: 2px solid #333;
+      overflow: hidden;
+      margin-right: 20px;
+    }
+    /* Side menu styling */
+    #menu {
+      width: 250px;
+      background: #fff;
+      border: 2px solid #333;
+      padding: 10px;
+    }
+    #menu h2, #menu h3 {
+      margin-top: 0;
+    }
+    .unit-config {
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #ccc;
+    }
+    .unit-config label {
+      font-size: 14px;
+    }
+    .unit-config input {
+      width: 60px;
+      margin-left: 5px;
+    }
+    button {
+      margin: 5px 0;
+      padding: 8px 12px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    /* Sun button styled as a sun */
+    #sun {
+      width: 50px;
+      height: 50px;
+      background: yellow;
+      border: 2px solid #ccc;
+      border-radius: 50%;
+      font-size: 16px;
+      line-height: 46px;
+      text-align: center;
+      display: inline-block;
+      cursor: pointer;
+    }
+    /* Health text is centered in each unit */
+    .unit {
+      position: absolute;
+      border-radius: 50%;
+      transition: transform 0.2s;
+      text-align: center;
+      font-weight: bold;
+      color: white;
+      user-select: none;
+    }
+    /* Friendly and enemy unit colors */
+    .player { background: blue; }
+    .enemy { background: red; }
+    /* Base styles */
+    .base {
+      position: absolute;
+      width: 40px;
+      height: 100%;
+      top: 0;
+      opacity: 0.5;
+      text-align: center;
+      color: white;
+      font-weight: bold;
+      z-index: 1;
+    }
+    #playerBase { left: 0; background: green; }
+    #enemyBase { right: 0; background: purple; }
+    /* Pulsate animation for combat/attacking units */
+    @keyframes pulsate {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.2); }
+      100% { transform: scale(1); }
+    }
+    .pulsate { animation: pulsate 0.5s infinite; }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <div id="game">
+      <!-- Bases -->
+      <div id="playerBase" class="base">
+        <div id="playerBaseHealth">Player Base: 100</div>
+      </div>
+      <div id="enemyBase" class="base">
+        <div id="enemyBaseHealth">Enemy Base: 100</div>
+      </div>
+    </div>
+    <div id="menu">
+      <h2>Game Settings</h2>
+      <div class="unit-config" data-type="default">
+        <h3>Default Unit</h3>
+        <label>Speed: <input type="number" id="defaultSpeed" value="0.3" step="0.1"></label><br>
+        <label>Health: <input type="number" id="defaultHealth" value="3" step="1"></label><br>
+        <label>Cost: <input type="number" id="defaultCost" value="10" step="1"></label>
+      </div>
+      <div class="unit-config" data-type="big">
+        <h3>Big Unit</h3>
+        <label>Speed: <input type="number" id="bigSpeed" value="0.2" step="0.1"></label><br>
+        <label>Health: <input type="number" id="bigHealth" value="6" step="1"></label><br>
+        <label>Cost: <input type="number" id="bigCost" value="20" step="1"></label>
+      </div>
+      <div class="unit-config" data-type="small">
+        <h3>Small Unit</h3>
+        <label>Speed: <input type="number" id="smallSpeed" value="0.4" step="0.1"></label><br>
+        <label>Health: <input type="number" id="smallHealth" value="2" step="1"></label><br>
+        <label>Cost: <input type="number" id="smallCost" value="5" step="1"></label>
+      </div>
+      <button id="beginGame">Begin Game</button>
+      <h2>Controls</h2>
+      <div id="sunContainer">
+        <div id="sun" title="Click to get money!">☀️</div>
+        <span id="money">Money: $0</span>
+      </div>
+      <div id="spawnButtons">
+        <button class="spawnUnit" data-type="default">Spawn Default Unit</button>
+        <button class="spawnUnit" data-type="big">Spawn Big Unit</button>
+        <button class="spawnUnit" data-type="small">Spawn Small Unit</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Get DOM elements
+    const game = document.getElementById('game');
+    const moneyDisplay = document.getElementById('money');
+    const playerBaseElem = document.getElementById('playerBaseHealth');
+    const enemyBaseElem = document.getElementById('enemyBaseHealth');
+    const beginButton = document.getElementById('beginGame');
+
+    // Game area dimensions
+    const gameWidth = game.clientWidth;
+    const gameHeight = game.clientHeight;
+    // Define three lanes (vertical center positions)
+    const lanes = [
+      gameHeight / 6,      // Top lane
+      gameHeight / 2,      // Middle lane
+      gameHeight * 5 / 6   // Bottom lane
+    ];
+
+    // Global game state
+    let money = 0;
+    let playerBaseHealth = 100;
+    let enemyBaseHealth = 100;
+    let gameOver = false;
+    let playerUnits = [];
+    let enemyUnits = [];
+    let enemySpawnInterval = null;
+
+    // Damage rates (per frame)
+    const combatDamage = 0.05;
+    const baseDamagePerUnit = 0.05;
+
+    // Update UI displays
+    function updateMoneyDisplay() {
+      moneyDisplay.textContent = "Money: $" + Math.floor(money);
+    }
+    function updateBaseDisplays() {
+      playerBaseElem.textContent = "Player Base: " + Math.floor(playerBaseHealth);
+      enemyBaseElem.textContent = "Enemy Base: " + Math.floor(enemyBaseHealth);
+    }
+
+    // Helper: returns true if any unit in the list is in the given lane
+    function isLaneOccupied(units, lane) {
+      return units.some(unit => unit.lane === lane);
+    }
+
+    // Spawn a friendly unit based on configuration and lane selection logic.
+    function spawnPlayerUnit() {
+      const type = this.dataset.type;
+      // Read configuration values from the menu inputs
+      let config = {};
+      if (type === "big") {
+        config.speed = parseFloat(document.getElementById("bigSpeed").value);
+        config.health = parseFloat(document.getElementById("bigHealth").value);
+        config.cost = parseFloat(document.getElementById("bigCost").value);
+        config.size = 50;
+      } else if (type === "small") {
+        config.speed = parseFloat(document.getElementById("smallSpeed").value);
+        config.health = parseFloat(document.getElementById("smallHealth").value);
+        config.cost = parseFloat(document.getElementById("smallCost").value);
+        config.size = 20;
+      } else {
+        config.speed = parseFloat(document.getElementById("defaultSpeed").value);
+        config.health = parseFloat(document.getElementById("defaultHealth").value);
+        config.cost = parseFloat(document.getElementById("defaultCost").value);
+        config.size = 30;
+      }
+      if (money < config.cost) return;
+      money -= config.cost;
+      updateMoneyDisplay();
+
+      let chosenLane = null;
+      // Prioritize lanes that already have an enemy but no friendly unit.
+      if (enemyUnits.length > 0) {
+        const sortedEnemies = enemyUnits.slice().sort((a, b) => a.x - b.x);
+        let enemyLanes = [];
+        sortedEnemies.forEach(e => { if (!enemyLanes.includes(e.lane)) enemyLanes.push(e.lane); });
+        for (let lane of enemyLanes) {
+          if (!isLaneOccupied(playerUnits, lane)) {
+            chosenLane = lane;
+            break;
+          }
+        }
+        // If none found, pick any lane that isn’t already occupied.
+        if (chosenLane === null) {
+          for (let lane = 0; lane < lanes.length; lane++) {
+            if (!isLaneOccupied(playerUnits, lane)) {
+              chosenLane = lane;
+              break;
+            }
+          }
+        }
+        // If all lanes are occupied, default to the lane of the enemy closest to the player base.
+        if (chosenLane === null) {
+          chosenLane = sortedEnemies[0].lane;
+        }
+      } else {
+        // If no enemy exists, prioritize middle then top then bottom.
+        for (let lane of [1, 0, 2]) {
+          if (!isLaneOccupied(playerUnits, lane)) {
+            chosenLane = lane;
+            break;
+          }
+        }
+        if (chosenLane === null) chosenLane = 1;
+      }
+
+      // Create the friendly unit element
+      const unitElem = document.createElement('div');
+      unitElem.classList.add('unit', 'player');
+      unitElem.style.width = config.size + "px";
+      unitElem.style.height = config.size + "px";
+      unitElem.style.lineHeight = config.size + "px";
+      unitElem.style.fontSize = (config.size * 0.5) + "px";
+      // Spawn at x = 50 and vertically center in the chosen lane
+      const unitObj = {
+        element: unitElem,
+        x: 50,
+        lane: chosenLane,
+        y: lanes[chosenLane] - config.size / 2,
+        speed: config.speed,
+        health: config.health,
+        fighting: false,
+        attackingBase: false,
+        size: config.size
+      };
+      unitElem.style.left = unitObj.x + "px";
+      unitElem.style.top = unitObj.y + "px";
+      unitElem.innerText = Math.ceil(unitObj.health);
+      game.appendChild(unitElem);
+      playerUnits.push(unitObj);
+    }
+
+    // Spawn an enemy unit.
+    // Enemy units use fixed settings (size: 30, speed: 0.3, health: 1) and lane selection based on friendly presence.
+    function spawnEnemyUnit() {
+      const unitElem = document.createElement('div');
+      unitElem.classList.add('unit', 'enemy');
+      const size = 30;
+      unitElem.style.width = size + "px";
+      unitElem.style.height = size + "px";
+      unitElem.style.lineHeight = size + "px";
+      unitElem.style.fontSize = (size * 0.5) + "px";
+      const spawnX = gameWidth - 50;
+      const spawnY = gameHeight / 2 - size / 2;
+      let chosenLane = null;
+      if (playerUnits.length > 0) {
+        const sortedPlayers = playerUnits.slice().sort((a, b) => b.x - a.x);
+        let friendlyLanes = [];
+        sortedPlayers.forEach(p => { if (!friendlyLanes.includes(p.lane)) friendlyLanes.push(p.lane); });
+        for (let lane of friendlyLanes) {
+          if (!isLaneOccupied(enemyUnits, lane)) {
+            chosenLane = lane;
+            break;
+          }
+        }
+        if (chosenLane === null) {
+          for (let lane = 0; lane < lanes.length; lane++) {
+            if (!isLaneOccupied(enemyUnits, lane)) {
+              chosenLane = lane;
+              break;
+            }
+          }
+        }
+        if (chosenLane === null) {
+          chosenLane = sortedPlayers[0].lane;
+        }
+      } else {
+        chosenLane = 1;
+      }
+      const targetY = lanes[chosenLane] - size / 2;
+      const unitObj = {
+        element: unitElem,
+        x: spawnX,
+        y: spawnY,
+        lane: chosenLane,
+        targetY: targetY,
+        speed: 0.3,
+        health: 1,
+        fighting: false,
+        attackingBase: false,
+        size: size
+      };
+      unitElem.style.left = unitObj.x + "px";
+      unitElem.style.top = unitObj.y + "px";
+      unitElem.innerText = Math.ceil(unitObj.health);
+      game.appendChild(unitElem);
+      enemyUnits.push(unitObj);
+    }
+
+    // Attach event listeners to spawn buttons and sun button
+    document.querySelectorAll('.spawnUnit').forEach(button => {
+      button.addEventListener('click', spawnPlayerUnit);
+    });
+    document.getElementById('sun').addEventListener('click', () => {
+      money += 5;
+      updateMoneyDisplay();
+    });
+
+    // Main game loop
+    function gameLoop() {
+      if (gameOver) return;
+      // Update health displays
+      playerUnits.forEach(unit => {
+        unit.element.innerText = Math.ceil(unit.health);
+      });
+      enemyUnits.forEach(unit => {
+        unit.element.innerText = Math.ceil(unit.health);
+      });
+      // Process combat for each lane
+      for (let lane = 0; lane < 3; lane++) {
+        const lanePlayers = playerUnits.filter(u => u.lane === lane);
+        const laneEnemies = enemyUnits.filter(u => u.lane === lane);
+        lanePlayers.sort((a, b) => a.x - b.x);
+        laneEnemies.sort((a, b) => a.x - b.x);
+        if (lanePlayers.length > 0 && laneEnemies.length > 0) {
+          const frontPlayer = lanePlayers[lanePlayers.length - 1];
+          const frontEnemy = laneEnemies[0];
+          if (frontPlayer.x + frontPlayer.size >= frontEnemy.x) {
+            frontPlayer.fighting = true;
+            frontEnemy.fighting = true;
+            frontPlayer.element.classList.add('pulsate');
+            frontEnemy.element.classList.add('pulsate');
+            frontPlayer.health -= combatDamage;
+            frontEnemy.health -= combatDamage;
+            if (frontPlayer.health <= 0 && frontEnemy.health <= 0) {
+              game.removeChild(frontPlayer.element);
+              game.removeChild(frontEnemy.element);
+              playerUnits = playerUnits.filter(u => u !== frontPlayer);
+              enemyUnits = enemyUnits.filter(u => u !== frontEnemy);
+            } else if (frontPlayer.health <= 0) {
+              game.removeChild(frontPlayer.element);
+              playerUnits = playerUnits.filter(u => u !== frontPlayer);
+              frontEnemy.fighting = false;
+              frontEnemy.element.classList.remove('pulsate');
+            } else if (frontEnemy.health <= 0) {
+              game.removeChild(frontEnemy.element);
+              enemyUnits = enemyUnits.filter(u => u !== frontEnemy);
+              frontPlayer.fighting = false;
+              frontPlayer.element.classList.remove('pulsate');
+            }
+          }
+        }
+      }
+      // Move friendly units (if not fighting or attacking)
+      playerUnits.forEach(unit => {
+        if (unit.fighting || unit.attackingBase) return;
+        if (unit.x + unit.size >= gameWidth - 40) {
+          unit.attackingBase = true;
+          unit.element.classList.add('pulsate');
+        } else {
+          unit.x += unit.speed;
+          unit.element.style.left = unit.x + "px";
+        }
+      });
+      // Move enemy units (adjust vertical position toward target lane)
+      enemyUnits.forEach(unit => {
+        if (Math.abs(unit.y - unit.targetY) > 1) {
+          unit.y += (unit.targetY - unit.y) * 0.1;
+          unit.element.style.top = unit.y + "px";
+        } else {
+          unit.y = unit.targetY;
+          unit.element.style.top = unit.y + "px";
+        }
+        if (unit.fighting || unit.attackingBase) return;
+        if (unit.x <= 40) {
+          unit.attackingBase = true;
+          unit.element.classList.add('pulsate');
+        } else {
+          unit.x -= unit.speed;
+          unit.element.style.left = unit.x + "px";
+        }
+      });
+      // Process base attacks
+      const playerBaseAttackers = enemyUnits.filter(u => u.attackingBase);
+      const enemyBaseAttackers = playerUnits.filter(u => u.attackingBase);
+      if (playerBaseAttackers.length > 0) {
+        playerBaseHealth -= baseDamagePerUnit * playerBaseAttackers.length;
+        if (playerBaseHealth < 0) playerBaseHealth = 0;
+      }
+      if (enemyBaseAttackers.length > 0) {
+        enemyBaseHealth -= baseDamagePerUnit * enemyBaseAttackers.length;
+        if (enemyBaseHealth < 0) enemyBaseHealth = 0;
+      }
+      updateBaseDisplays();
+      // Check for game over
+      if (playerBaseHealth <= 0) {
+        alert("Game Over! You Lose.");
+        gameOver = true;
+        return;
+      }
+      if (enemyBaseHealth <= 0) {
+        alert("Game Over! You Win!");
+        gameOver = true;
+        return;
+      }
+      requestAnimationFrame(gameLoop);
+    }
+
+    // Reset game state and start the game loop
+    function resetGame() {
+      // Remove all existing unit elements
+      playerUnits.forEach(unit => { if(unit.element.parentNode === game) game.removeChild(unit.element); });
+      enemyUnits.forEach(unit => { if(unit.element.parentNode === game) game.removeChild(unit.element); });
+      playerUnits = [];
+      enemyUnits = [];
+      money = 0;
+      playerBaseHealth = 100;
+      enemyBaseHealth = 100;
+      gameOver = false;
+      updateMoneyDisplay();
+      updateBaseDisplays();
+      // Clear any previous enemy spawn interval
+      if (enemySpawnInterval) clearInterval(enemySpawnInterval);
+      enemySpawnInterval = setInterval(() => { if (!gameOver) spawnEnemyUnit(); }, 1000);
+      requestAnimationFrame(gameLoop);
+    }
+
+    // Begin/Restart game when the button is clicked
+    beginButton.addEventListener('click', resetGame);
+  </script>
+</body>
+</html>
