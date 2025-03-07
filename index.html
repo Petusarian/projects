@@ -2,31 +2,89 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Stuff</title>
+  <title>My Games</title>
   <style>
     body {
       font-family: sans-serif;
       padding: 20px;
       background: #f0f0f0;
     }
-    iframe {
+    h1 {
+      text-align: center;
+    }
+    /* Tab navigation styling */
+    .tabs {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 10px;
+    }
+    .tab {
+      padding: 10px 20px;
+      margin: 0 2px;
+      background: #ddd;
+      border: 1px solid #ccc;
+      cursor: pointer;
+    }
+    .tab.active {
+      background: #fff;
+      border-bottom: 1px solid #fff;
+    }
+    /* Content container styling */
+    .content {
+      border: 1px solid #ccc;
+      background: #fff;
+      padding: 0;
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
       display: block;
+    }
+    iframe {
       width: 100%;
-      max-width: 1400px;
       height: 800px;
       border: none;
-      margin-bottom: 20px;
+      display: block;
     }
   </style>
 </head>
 <body>
-  <h1>Stuff</h1>
+  <h1>My Games</h1>
+  <div class="tabs">
+    <div class="tab active" data-tab="tug">Tug of War</div>
+    <div class="tab" data-tab="re">RE Inventory</div>
+    <div class="tab" data-tab="inv">Inventory Demo</div>
+  </div>
+  <div class="content">
+    <div class="tab-content active" id="tug">
+      <iframe src="tugOfWargame.html"></iframe>
+    </div>
+    <div class="tab-content" id="re">
+      <iframe src="REinventory.html"></iframe>
+    </div>
+    <div class="tab-content" id="inv">
+      <iframe src="Inventory.html"></iframe>
+    </div>
+  </div>
   
-  <!-- Embed the Resident Evil Inventory game -->
-  <iframe src="REinventory.html"></iframe>
-  <!-- Embed the Inventory System Demo -->
-  <iframe src="Inventory.html"></iframe>
-  <!-- Embed the Tug of War game -->
-  <iframe src="tugOfWargame.html"></iframe>
+  <script>
+    // Select tabs and contents
+    const tabs = document.querySelectorAll('.tab');
+    const contents = document.querySelectorAll('.tab-content');
+    
+    // Add click event listeners to each tab
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        // Remove active classes from all tabs and contents
+        tabs.forEach(t => t.classList.remove('active'));
+        contents.forEach(c => c.classList.remove('active'));
+        
+        // Add active class to clicked tab and its corresponding content
+        tab.classList.add('active');
+        document.getElementById(tab.getAttribute('data-tab')).classList.add('active');
+      });
+    });
+  </script>
 </body>
 </html>
