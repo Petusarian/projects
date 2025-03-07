@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Enhanced Browser Shooter with Transitions</title>
+  <title>Enhanced Browser Shooter with Ammo Animation</title>
   <style>
     body { margin: 0; overflow: hidden; background: #222; }
     #gameContainer { position: relative; width: 800px; margin: 0 auto; }
@@ -34,19 +34,17 @@
 
     // Base settings
     let baseHealth = 100;
-    const baseMaxHealth = 100;
     const base = {
       x: canvas.width - 100,
       y: canvas.height / 2 - 40,
       width: 80,
-      height: 80,
-      shakeOffset: 0
+      height: 80
     };
 
     // Ammo settings and visual fill
     const maxAmmo = 10;
     let ammo = maxAmmo;
-    const reloadTime = 2000; // ms
+    const reloadTimePerBullet = 200; // ms per bullet
     let isReloading = false;
     let shakeTime = 0;  // shake timer in ms
 
@@ -57,9 +55,9 @@
     let enemiesSpawned = 0;
     let transitionTimer = 0;  // timer for day transition (in ms)
     const transitionDuration = 2000; // 2 seconds pause for day transition
-    let transitionAlpha = 1; // for fade effect
+    let transitionMessage = "";
 
-    // Bullet and enemy arrays
+    // Arrays for bullets and enemies
     let bullets = [];
     let enemies = [];
 
@@ -68,21 +66,18 @@
 
     let lastEnemySpawn = Date.now();
 
-    // Variables for transition fade effect
-    let transitionMessage = "";
-
-    // For shake effect: if no ammo and player tries to shoot
+    // For shake effect when shooting with no ammo
     function triggerShake() {
       shakeTime = 300; // shake for 300ms
     }
 
-    // Start Game button click handler
+    // Start Game button handler
     startButton.addEventListener("click", () => {
       startButton.style.display = "none";
       startTransition(); // start with Day 1 transition
     });
 
-    // Listen for mouse clicks to shoot (only in running state)
+    // Mouse click to shoot (only when game is running)
     canvas.addEventListener("click", (e) => {
       if (gameState !== "running") return;
       if (isReloading || ammo <= 0) {
@@ -101,15 +96,19 @@
       ammo--;
     });
 
-    // Listen for spacebar to reload ammo
+    // Spacebar to reload ammo gradually (one bullet every 200ms)
     window.addEventListener("keydown", (e) => {
       if (gameState !== "running") return;
       if (e.code === "Space" && !isReloading && ammo < maxAmmo) {
         isReloading = true;
-        setTimeout(() => {
-          ammo = maxAmmo;
-          isReloading = false;
-        }, reloadTime);
+        let reloadInterval = setInterval(() => {
+          ammo++;
+          if (ammo >= maxAmmo) {
+            ammo = maxAmmo;
+            isReloading = false;
+            clearInterval(reloadInterval);
+          }
+        }, reloadTimePerBullet);
       }
     });
 
@@ -124,7 +123,7 @@
       enemiesSpawned++;
     }
 
-    // Function to start a day transition
+    // Function to start a day transition (fade to black with Day message)
     function startTransition() {
       gameState = "transition";
       transitionTimer = transitionDuration;
@@ -132,7 +131,7 @@
       // Reset enemy spawn counts for the new day
       enemiesToSpawn = day * 5;
       enemiesSpawned = 0;
-      // Clear any leftover enemies/bullets if needed
+      // Clear existing enemies and bullets
       enemies = [];
       bullets = [];
     }
@@ -140,14 +139,14 @@
     // Update game state
     function update(deltaTime) {
       if (gameState === "running") {
-        // Update bullets: move and remove if out of bounds
+        // Update bullets: move and remove out-of-bound ones
         bullets = bullets.filter(bullet => bullet.x < canvas.width && bullet.y > 0 && bullet.y < canvas.height);
         bullets.forEach(bullet => {
           bullet.x += bulletSpeed * Math.cos(bullet.angle);
           bullet.y += bulletSpeed * Math.sin(bullet.angle);
         });
 
-        // Spawn enemies until the wave quota is reached
+        // Spawn enemies until wave quota is reached
         if (enemiesSpawned < enemiesToSpawn) {
           if (Date.now() - lastEnemySpawn > 1500) {
             spawnEnemy();
@@ -158,9 +157,9 @@
         // Update enemies: move them toward the base
         enemies.forEach((enemy, index) => {
           enemy.x += enemySpeed;
-          // If enemy reaches the base, damage the base
+          // If enemy reaches the base, damage the base and remove enemy
           if (enemy.x + enemy.width > base.x) {
-            baseHealth -= 10;  // each enemy does 10 damage
+            baseHealth -= 10;
             enemies.splice(index, 1);
           }
         });
@@ -168,15 +167,19 @@
         // Collision detection: bullet hits enemy
         bullets.forEach((bullet, bi) => {
           enemies.forEach((enemy, ei) => {
-            if (bullet.x > enemy.x && bullet.x < enemy.x + enemy.width &&
-                bullet.y > enemy.y && bullet.y < enemy.y + enemy.height) {
+            if (
+              bullet.x > enemy.x &&
+              bullet.x < enemy.x + enemy.width &&
+              bullet.y > enemy.y &&
+              bullet.y < enemy.y + enemy.height
+            ) {
               enemies.splice(ei, 1);
               bullets.splice(bi, 1);
             }
           });
         });
 
-        // If wave is cleared and no more enemies are coming, advance day/wave
+        // If wave is cleared and no more enemies will spawn, advance to next day
         if (enemies.length === 0 && enemiesSpawned >= enemiesToSpawn) {
           if (day < maxDays) {
             day++;
@@ -190,12 +193,12 @@
         transitionTimer -= deltaTime;
         if (transitionTimer <= 0) {
           gameState = "running";
-          // Reset ammo on new day if desired
+          // Reset ammo when a new day starts
           ammo = maxAmmo;
         }
       }
 
-      // Update shake timer for base if active
+      // Update shake timer for base
       if (shakeTime > 0) {
         shakeTime -= deltaTime;
         if (shakeTime < 0) shakeTime = 0;
@@ -204,28 +207,24 @@
 
     // Render game objects and UI
     function draw() {
-      // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Draw game elements only if game not in menu
       if (gameState === "running" || gameState === "transition") {
-        // Draw base with possible shake offset
+        // Draw base with shake effect if active
         let shakeOffset = 0;
         if (shakeTime > 0) {
-          shakeOffset = (Math.random() - 0.5) * 10; // shake magnitude up to 5 pixels left/right
+          shakeOffset = (Math.random() - 0.5) * 10;
         }
-        // Draw base (player) as a rectangle
         ctx.fillStyle = "#00AA00";
         ctx.fillRect(base.x + shakeOffset, base.y, base.width, base.height);
 
-        // Draw ammo fill inside the base
-        // Calculate fill height proportional to ammo left
+        // Draw ammo bar inside the base:
+        // The fill height is proportional to ammo; it fills from bottom to top.
         let ammoFillHeight = (ammo / maxAmmo) * base.height;
-        // Set fill opacity proportional to ammo (full ammo = full opacity)
         ctx.fillStyle = "rgba(0,255,0," + (ammo / maxAmmo) + ")";
         ctx.fillRect(base.x + shakeOffset, base.y + base.height - ammoFillHeight, base.width, ammoFillHeight);
 
-        // Draw bullets (yellow circles)
+        // Draw bullets as yellow circles
         ctx.fillStyle = "#FFFF00";
         bullets.forEach(bullet => {
           ctx.beginPath();
@@ -233,23 +232,25 @@
           ctx.fill();
         });
 
-        // Draw enemies (red squares)
+        // Draw enemies as red squares
         ctx.fillStyle = "#FF0000";
         enemies.forEach(enemy => {
           ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
         });
 
-        // Draw UI: base health, ammo, and day info
+        // Draw UI text on the top-left
         ctx.fillStyle = "#FFFFFF";
         ctx.font = "18px sans-serif";
+        ctx.textAlign = "left";
         ctx.fillText("Base Health: " + baseHealth, 20, 30);
         ctx.fillText("Ammo: " + ammo + (isReloading ? " (Reloading...)" : ""), 20, 60);
         ctx.fillText("Day: " + day + " / " + maxDays, 20, 90);
+        let enemiesRemaining = (enemiesToSpawn - enemiesSpawned) + enemies.length;
+        ctx.fillText("Enemies Remaining: " + enemiesRemaining, 20, 120);
       }
 
-      // Draw transition overlay if in transition state
+      // Draw transition overlay with day message
       if (gameState === "transition") {
-        // Fade effect: we can simply draw a black rectangle over everything.
         ctx.fillStyle = "rgba(0,0,0,0.8)";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = "#FFFFFF";
@@ -272,7 +273,7 @@
       }
     }
 
-    // Main game loop variables
+    // Main game loop
     let lastTime = 0;
     function gameLoop(timestamp) {
       const deltaTime = timestamp - lastTime;
@@ -284,7 +285,6 @@
       requestAnimationFrame(gameLoop);
     }
 
-    // Start the game loop
     requestAnimationFrame(gameLoop);
   </script>
 </body>
