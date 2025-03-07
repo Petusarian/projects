@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Simple Browser Shooter</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: #222; }
+    canvas { display: block; margin: 0 auto; background: #444; }
+    #info { color: white; text-align: center; font-family: sans-serif; }
+  </style>
+</head>
+<body>
+  <div id="info">
+    <h1>Simple Browser Shooter</h1>
+    <p>Click to shoot; Enemies approach from the left.</p>
+  </div>
+  <canvas id="gameCanvas" width="800" height="400"></canvas>
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    // Game state
+    let bullets = [];
+    let enemies = [];
+    let lastEnemySpawn = 0;
+    const enemySpawnInterval = 2000; // in milliseconds
+    const bulletSpeed = 5;
+    const enemySpeed = 1.5;
+    
+    // Player base position (fixed for this demo)
+    const base = {
+      x: canvas.width - 100,
+      y: canvas.height / 2,
+      width: 80,
+      height: 80
+    };
+
+    // Listen for mouse clicks to shoot a bullet
+    canvas.addEventListener("click", (e) => {
+      // Calculate angle from base center to click position
+      const rect = canvas.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const clickY = e.clientY - rect.top;
+      const angle = Math.atan2(clickY - (base.y + base.height / 2), clickX - (base.x + base.width / 2));
+      bullets.push({
+        x: base.x + base.width / 2,
+        y: base.y + base.height / 2,
+        angle: angle
+      });
+    });
+
+    // Function to spawn an enemy at random vertical position at the left
+    function spawnEnemy() {
+      enemies.push({
+        x: -50,
+        y: Math.random() * (canvas.height - 50),
+        width: 40,
+        height: 40,
+        health: 1
+      });
+    }
+
+    // Update game objects
+    function update(deltaTime) {
+      // Update bullets
+      bullets = bullets.filter(bullet => bullet.x < canvas.width && bullet.y > 0 && bullet.y < canvas.height);
+      bullets.forEach(bullet => {
+        bullet.x += bulletSpeed * Math.cos(bullet.angle);
+        bullet.y += bulletSpeed * Math.sin(bullet.angle);
+      });
+
+      // Spawn enemies at intervals
+      if (Date.now() - lastEnemySpawn > enemySpawnInterval) {
+        spawnEnemy();
+        lastEnemySpawn = Date.now();
+      }
+
+      // Update enemies: move them towards the base (to the right)
+      enemies.forEach(enemy => {
+        enemy.x += enemySpeed;
+      });
+
+      // Collision detection: check if a bullet hits an enemy
+      bullets.forEach((bullet, bi) => {
+        enemies.forEach((enemy, ei) => {
+          if (bullet.x > enemy.x && bullet.x < enemy.x + enemy.width &&
+              bullet.y > enemy.y && bullet.y < enemy.y + enemy.height) {
+            // Remove enemy on hit
+            enemies.splice(ei, 1);
+            // Remove bullet as well
+            bullets.splice(bi, 1);
+          }
+        });
+      });
+
+      // Check if any enemy reaches the base (simple collision check)
+      enemies.forEach((enemy, index) => {
+        if (enemy.x + enemy.width > base.x) {
+          // In a full game you might reduce base health here.
+          console.log("An enemy reached the base!");
+          enemies.splice(index, 1);
+        }
+      });
+    }
+
+    // Render game objects
+    function draw() {
+      // Clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw base (simple rectangle)
+      ctx.fillStyle = "#00AA00";
+      ctx.fillRect(base.x, base.y, base.width, base.height);
+
+      // Draw bullets (as small circles)
+      ctx.fillStyle = "#FFFF00";
+      bullets.forEach(bullet => {
+        ctx.beginPath();
+        ctx.arc(bullet.x, bullet.y, 5, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Draw enemies (as red squares)
+      ctx.fillStyle = "#FF0000";
+      enemies.forEach(enemy => {
+        ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+      });
+    }
+
+    // Main game loop
+    let lastTime = 0;
+    function gameLoop(timestamp) {
+      const deltaTime = timestamp - lastTime;
+      lastTime = timestamp;
+      update(deltaTime);
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    // Start the game loop
+    requestAnimationFrame(gameLoop);
+  </script>
+</body>
+</html>
