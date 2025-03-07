@@ -2,11 +2,15 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Enhanced Browser Shooter – Defend Your Wall</title>
+  <title>Enhanced Browser Shooter – Impact Only</title>
   <style>
     body { margin: 0; overflow: hidden; background: #222; }
     #gameContainer { position: relative; width: 1280px; margin: 0 auto; }
-    canvas { display: block; background: #444; }
+    canvas { 
+      display: block; 
+      background: #444; 
+      cursor: crosshair; /* Reticle */
+    }
     #startScreen {
       position: absolute;
       top: 0;
@@ -37,37 +41,40 @@
     <div id="startScreen">
       <h1>Enhanced Browser Shooter</h1>
       <p>
-        Protect your wall – the barrier in front of you – from waves of enemies!
+        Protect your wall from waves of enemies!
       </p>
       <p>
         <strong>Controls:</strong><br>
-        Click to shoot (if you have ammo).<br>
-        Press Space to reload (ammo refills gradually).<br>
-        Enemies approach from the left and stop at your wall, then perform a punch-like attack with a delay.<br>
-        If your wall’s health reaches 0, it’s game over.
+        Click anywhere to shoot. Instead of visible bullets, you'll see a brief impact effect at the mouse position.<br>
+        If you click on an enemy, it will rapidly shake and disappear (simulate a quick death).<br>
+        Ammo is displayed as a bar (with numbers) in the top-left and reloads automatically.
+      </p>
+      <p>
+        Enemies approach from the left, stop at your wall, and attack it with a punch-like animation.<br>
+        If your wall’s health reaches 0, it's game over.
       </p>
       <button id="startButton">Start Game</button>
     </div>
     <canvas id="gameCanvas" width="1280" height="720"></canvas>
   </div>
   <script>
-    // Canvas setup
+    // Canvas and context
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
     const startScreen = document.getElementById("startScreen");
     const startButton = document.getElementById("startButton");
 
-    // Constants
+    // Constants for canvas size and padding
     const CANVAS_WIDTH = 1280;
     const CANVAS_HEIGHT = 720;
     const PADDING = 50;
 
-    // Game state: "menu", "transition", "running", "gameover", "win"
+    // Game States: "menu", "transition", "running", "gameover", "win"
     let gameState = "menu";
 
-    // Define the player (positioned behind the wall)
+    // Define the player (positioned behind the wall; used only for ammo display now)
     const player = {
-      x: CANVAS_WIDTH - 150, // player is behind the wall
+      x: CANVAS_WIDTH - 150, // behind the wall
       y: CANVAS_HEIGHT / 2 - 40,
       width: 80,
       height: 80
@@ -82,78 +89,18 @@
       health: 100
     };
 
-    // Ammo settings (ammo bar drawn inside the player's square)
+    // Ammo settings (ammo bar displayed at top-left)
     const maxAmmo = 10;
     let ammo = maxAmmo;
-    const reloadTime = 2000; // ms
+    const reloadTime = 2000; // ms for full reload
     let isReloading = false;
     let reloadInterval = null;
-    let shakeTime = 0; // for when shooting without ammo
 
-    // Day/Wave system
-    let day = 1;
-    const maxDays = 5;
-    let enemiesToSpawn = day * 5;
-    let enemiesSpawned = 0;
-    let transitionTimer = 0;
-    const transitionDuration = 2000; // ms
-    let transitionMessage = "";
-
-    // Function to count remaining enemies (to spawn + currently alive)
-    function enemiesRemaining() {
-      return (enemiesToSpawn - enemiesSpawned) + enemies.length;
-    }
-
-    // Arrays for bullets and enemies
-    let bullets = [];
-    let enemies = [];
-
-    const bulletSpeed = 4;
-    const enemySpeed = 0.8;
-
-    let lastEnemySpawn = Date.now();
-
-    // Attack cycle parameters for enemy punch animation
-    const attackCycle = 800; // ms
-    const maxPunchRotation = 0.3; // radians
-
-    // Shake effect for when shooting without ammo
-    function triggerShake() {
-      shakeTime = 300;
-    }
-
-    // Start Game handler
-    startButton.addEventListener("click", () => {
-      startScreen.style.display = "none";
-      startTransition();
-    });
-
-    // Shooting: player shoots from behind the wall
-    canvas.addEventListener("click", (e) => {
-      if (gameState !== "running") return;
-      if (isReloading || ammo <= 0) {
-        if (ammo <= 0) triggerShake();
-        return;
-      }
-      const rect = canvas.getBoundingClientRect();
-      const clickX = e.clientX - rect.left;
-      const clickY = e.clientY - rect.top;
-      // Calculate angle from player's center
-      const angle = Math.atan2(clickY - (player.y + player.height / 2), clickX - (player.x + player.width / 2));
-      bullets.push({
-        x: player.x + player.width / 2,
-        y: player.y + player.height / 2,
-        angle: angle
-      });
-      ammo--;
-    });
-
-    // Reload ammo gradually when pressing Space
-    window.addEventListener("keydown", (e) => {
-      if (gameState !== "running") return;
-      if (e.code === "Space" && !isReloading && ammo < maxAmmo) {
+    // Automatic reloading when ammo is 0
+    function autoReload() {
+      if (ammo <= 0 && !isReloading) {
         isReloading = true;
-        const refillTime = reloadTime / (maxAmmo - ammo);
+        const refillTime = reloadTime / maxAmmo;
         reloadInterval = setInterval(() => {
           if (ammo < maxAmmo) {
             ammo++;
@@ -163,25 +110,119 @@
           }
         }, refillTime);
       }
+    }
+
+    // Shake effect when trying to shoot with no ammo
+    let shakeTime = 0;
+    function triggerShake() {
+      shakeTime = 300; // ms
+    }
+
+    // Day/Wave system
+    let day = 1;
+    const maxDays = 5;
+    let enemiesToSpawn = day * 5;
+    let enemiesSpawned = 0;
+    let transitionTimer = 0;  // ms for day transition
+    const transitionDuration = 2000; // ms
+    let transitionMessage = "";
+
+    // Function: count remaining enemies (to spawn + currently alive)
+    function enemiesRemaining() {
+      return (enemiesToSpawn - enemiesSpawned) + enemies.length;
+    }
+
+    // Arrays for enemies and impact effects (no bullets now)
+    let enemies = [];
+    let impacts = [];
+
+    // Impact effect settings
+    const impactDuration = 300; // ms
+    // Each impact has x, y, initial radius, max radius, and remaining time
+
+    // Enemy settings
+    const enemySpeed = 0.8;
+    let lastEnemySpawn = Date.now();
+
+    // Attack cycle for enemy punch animation
+    const attackCycle = 800; // ms per cycle
+    const maxPunchRotation = 0.3; // radians
+
+    // Enemy death effect duration
+    const deathDuration = 300; // ms
+
+    // Start Game: hide start screen and begin Day 1 transition.
+    startButton.addEventListener("click", () => {
+      startScreen.style.display = "none";
+      startTransition();
     });
 
-    // Spawn enemy within padded area on the left
+    // Shooting: when clicking, produce an impact effect at the mouse position.
+    // Also, if click is inside an enemy's bounds, mark that enemy as dying.
+    canvas.addEventListener("click", (e) => {
+      if (gameState !== "running") return;
+      if (isReloading || ammo <= 0) {
+        if (ammo <= 0) triggerShake();
+        return;
+      }
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      let hitEnemy = null;
+      for (let i = 0; i < enemies.length; i++) {
+        const enemy = enemies[i];
+        if (!enemy.dying &&
+            mouseX >= enemy.x && mouseX <= enemy.x + enemy.width &&
+            mouseY >= enemy.y && mouseY <= enemy.y + enemy.height) {
+          hitEnemy = enemy;
+          break;
+        }
+      }
+      if (hitEnemy) {
+        hitEnemy.dying = true;
+        hitEnemy.deathTimer = deathDuration;
+        // Impact effect at enemy center.
+        impacts.push({
+          x: hitEnemy.x + hitEnemy.width / 2,
+          y: hitEnemy.y + hitEnemy.height / 2,
+          radius: 5,
+          maxRadius: 20,
+          duration: impactDuration,
+          remainingTime: impactDuration
+        });
+      } else {
+        // Impact effect at mouse click position.
+        impacts.push({
+          x: mouseX,
+          y: mouseY,
+          radius: 5,
+          maxRadius: 20,
+          duration: impactDuration,
+          remainingTime: impactDuration
+        });
+      }
+      ammo--;
+    });
+
+    // Spawn an enemy from the left (within padded area)
     function spawnEnemy() {
       const enemyHeight = 40;
       const enemyY = Math.random() * (CANVAS_HEIGHT - 2 * PADDING - enemyHeight) + PADDING;
       enemies.push({
-        x: PADDING - 50, // off-screen
+        x: PADDING - 50,
         y: enemyY,
         width: 40,
         height: enemyHeight,
         attacking: false,
         attackTimer: 0,
-        rotation: 0
+        rotation: 0,
+        dying: false,
+        deathTimer: 0
       });
       enemiesSpawned++;
     }
 
-    // Start day transition
+    // Start a day transition.
     function startTransition() {
       gameState = "transition";
       transitionTimer = transitionDuration;
@@ -189,62 +230,68 @@
       enemiesToSpawn = day * 5;
       enemiesSpawned = 0;
       enemies = [];
-      bullets = [];
+      impacts = [];
     }
 
-    // Update game state
+    // Update impact effects.
+    function updateImpacts(deltaTime) {
+      impacts = impacts.filter(impact => {
+        impact.remainingTime -= deltaTime;
+        return impact.remainingTime > 0;
+      });
+    }
+
+    // Draw impact effects.
+    function drawImpacts() {
+      impacts.forEach(impact => {
+        const alpha = impact.remainingTime / impact.duration;
+        const currentRadius = impact.radius + (impact.maxRadius - impact.radius) * (1 - alpha);
+        ctx.fillStyle = `rgba(255,255,0,${alpha})`;
+        ctx.beginPath();
+        ctx.arc(impact.x, impact.y, currentRadius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    // Update game state.
     function update(deltaTime) {
       if (gameState === "running") {
-        // Update bullets
-        bullets = bullets.filter(bullet => bullet.x < CANVAS_WIDTH && bullet.y > 0 && bullet.y < CANVAS_HEIGHT);
-        bullets.forEach(bullet => {
-          bullet.x += bulletSpeed * Math.cos(bullet.angle);
-          bullet.y += bulletSpeed * Math.sin(bullet.angle);
-        });
-
-        // Spawn enemies
+        autoReload();
+        
+        // Spawn enemies.
         if (enemiesSpawned < enemiesToSpawn) {
           if (Date.now() - lastEnemySpawn > 1500) {
             spawnEnemy();
             lastEnemySpawn = Date.now();
           }
         }
-
-        // Update enemies
-        enemies.forEach((enemy) => {
-          // Move enemy toward wall until it reaches the wall's left edge
-          if (enemy.x + enemy.width < wall.x) {
-            enemy.x += enemySpeed;
+        
+        // Update enemies.
+        enemies.forEach((enemy, index) => {
+          if (enemy.dying) {
+            enemy.deathTimer -= deltaTime;
+            enemy.x += (Math.random() - 0.5) * 2;
+            enemy.y += (Math.random() - 0.5) * 2;
+            if (enemy.deathTimer <= 0) {
+              enemies.splice(index, 1);
+            }
           } else {
-            // Clamp enemy at wall edge
-            enemy.x = wall.x - enemy.width;
-            enemy.attacking = true;
-            enemy.attackTimer += deltaTime;
-            // Compute punch rotation using sine curve for punch animation
-            enemy.rotation = maxPunchRotation * Math.sin(Math.PI * (enemy.attackTimer / attackCycle));
-            if (enemy.attackTimer >= attackCycle) {
-              wall.health -= 10;
-              enemy.attackTimer = 0;
+            if (enemy.x + enemy.width < wall.x) {
+              enemy.x += enemySpeed;
+            } else {
+              enemy.x = wall.x - enemy.width;
+              enemy.attacking = true;
+              enemy.attackTimer += deltaTime;
+              enemy.rotation = maxPunchRotation * Math.sin(Math.PI * (enemy.attackTimer / attackCycle));
+              if (enemy.attackTimer >= attackCycle) {
+                wall.health -= 10;
+                enemy.attackTimer = 0;
+              }
             }
           }
         });
-
-        // Collision detection for bullets and enemies
-        bullets.forEach((bullet, bi) => {
-          enemies.forEach((enemy, ei) => {
-            if (
-              bullet.x > enemy.x &&
-              bullet.x < enemy.x + enemy.width &&
-              bullet.y > enemy.y &&
-              bullet.y < enemy.y + enemy.height
-            ) {
-              enemies.splice(ei, 1);
-              bullets.splice(bi, 1);
-            }
-          });
-        });
-
-        // Advance day if wave is cleared
+        
+        // Advance day if wave is cleared.
         if (enemies.length === 0 && enemiesSpawned >= enemiesToSpawn) {
           if (day < maxDays) {
             day++;
@@ -260,39 +307,29 @@
           ammo = maxAmmo;
         }
       }
-
-      // Update shake timer
+      
       if (shakeTime > 0) {
         shakeTime -= deltaTime;
         if (shakeTime < 0) shakeTime = 0;
       }
-
-      // Check for game over condition
+      
       if (wall.health <= 0) {
         gameState = "gameover";
       }
+      
+      updateImpacts(deltaTime);
     }
 
-    // Draw everything
+    // Draw all game elements.
     function draw() {
       ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
       if (gameState === "running" || gameState === "transition") {
-        // Calculate shake offset for player if needed
-        let shakeOffset = 0;
-        if (shakeTime > 0) {
-          shakeOffset = (Math.random() - 0.5) * 10;
-        }
-
-        // Draw player behind the wall
+        // Draw the player behind the wall.
         ctx.fillStyle = "#00AA00";
-        ctx.fillRect(player.x + shakeOffset, player.y, player.width, player.height);
-        // Draw player's ammo bar inside player square
-        let ammoFillHeight = (ammo / maxAmmo) * player.height;
-        ctx.fillStyle = "rgba(0,255,0," + (ammo / maxAmmo) + ")";
-        ctx.fillRect(player.x + shakeOffset, player.y + player.height - ammoFillHeight, player.width, ammoFillHeight);
+        ctx.fillRect(player.x, player.y, player.width, player.height);
 
-        // Draw wall in front of player
+        // Draw the wall.
         ctx.fillStyle = "#006400";
         ctx.fillRect(wall.x, wall.y, wall.width, wall.height);
         ctx.fillStyle = "#FFFFFF";
@@ -300,19 +337,16 @@
         ctx.textAlign = "center";
         ctx.fillText("Wall Health: " + Math.max(0, Math.floor(wall.health)), wall.x + wall.width / 2, wall.y - 10);
 
-        // Draw bullets
-        ctx.fillStyle = "#FFFF00";
-        bullets.forEach(bullet => {
-          ctx.beginPath();
-          ctx.arc(bullet.x, bullet.y, 5, 0, Math.PI * 2);
-          ctx.fill();
-        });
-
-        // Draw enemies
+        // Draw enemies.
         enemies.forEach(enemy => {
           ctx.save();
-          if (enemy.attacking) {
-            // Translate to enemy center, apply rotation, then draw relative to center
+          if (enemy.dying) {
+            const offsetX = (Math.random() - 0.5) * 10;
+            const offsetY = (Math.random() - 0.5) * 10;
+            ctx.translate(enemy.x + enemy.width / 2 + offsetX, enemy.y + enemy.height / 2 + offsetY);
+            ctx.fillStyle = "#FF0000";
+            ctx.fillRect(-enemy.width / 2, -enemy.height / 2, enemy.width, enemy.height);
+          } else if (enemy.attacking) {
             ctx.translate(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
             ctx.rotate(enemy.rotation);
             ctx.fillStyle = "#FF0000";
@@ -324,17 +358,32 @@
           ctx.restore();
         });
 
-        // Draw UI text in top-left
+        // Draw impact effects.
+        drawImpacts();
+
+        // Draw Ammo Bar (top-left) with overlaid numbers.
+        const ammoBarWidth = 200;
+        const ammoBarHeight = 30;
+        const ammoX = 20;
+        const ammoY = 40;
+        ctx.strokeStyle = "#FFFFFF";
+        ctx.strokeRect(ammoX, ammoY, ammoBarWidth, ammoBarHeight);
+        const ammoFillWidth = (ammo / maxAmmo) * ammoBarWidth;
+        ctx.fillStyle = "#00FF00";
+        ctx.fillRect(ammoX, ammoY, ammoFillWidth, ammoBarHeight);
+        ctx.fillStyle = "#000000";
+        ctx.font = "20px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(ammo + " / " + maxAmmo, ammoX + ammoBarWidth / 2, ammoY + ammoBarHeight - 5);
+
+        // Draw additional UI text.
         ctx.fillStyle = "#FFFFFF";
         ctx.font = "18px sans-serif";
         ctx.textAlign = "left";
-        ctx.fillText("Wall Health: " + Math.max(0, Math.floor(wall.health)), 10, 30);
-        ctx.fillText("Ammo: " + ammo + (isReloading ? " (Reloading...)" : ""), 10, 60);
-        ctx.fillText("Day: " + day + " / " + maxDays, 10, 90);
-        ctx.fillText("Enemies Remaining: " + enemiesRemaining(), 10, 120);
+        ctx.fillText("Day: " + day + " / " + maxDays, 20, 80);
+        ctx.fillText("Enemies Remaining: " + enemiesRemaining(), 20, 110);
       }
 
-      // Draw day transition overlay
       if (gameState === "transition") {
         ctx.fillStyle = "rgba(0,0,0,0.8)";
         ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -344,7 +393,6 @@
         ctx.fillText(transitionMessage, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
       }
 
-      // Draw game over or win messages
       if (gameState === "gameover") {
         ctx.fillStyle = "#FF0000";
         ctx.font = "40px sans-serif";
@@ -358,7 +406,7 @@
       }
     }
 
-    // Main game loop
+    // Main game loop.
     let lastTime = 0;
     function gameLoop(timestamp) {
       const deltaTime = timestamp - lastTime;
