@@ -13,17 +13,16 @@
   }
   /* Game container */
   #gameContainer {
-    position: absolute;
-  top: 50%;
+  position: absolute;
+  top: 0;
   left: 50%;
   width: 1280px;
   height: 720px;
   background: #1A1F3B;
-  /* Translate to center then scale based on a CSS variable */
-  transform: translate(-50%, -50%) scale(var(--scale, 1));
-  /* Optional: set transform-origin to center (or adjust as needed) */
-  transform-origin: center;
-  }
+  transform: translateX(-50%) scale(var(--scale, 1));
+  transform-origin: center top;
+}
+
   canvas {
     display: block;
     background: #2E3B55; /* Dark blue canvas background */
@@ -561,6 +560,7 @@ function updateScale() {
 
 updateScale();
 window.addEventListener('resize', updateScale);
+
 
 
   // Main draw
