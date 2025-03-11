@@ -6,16 +6,15 @@
   <style>
   /* Overall container for a 1920x1080 view */
   #container {
-  position: absolute;
-  top: 0;
-  left: 50%;
-  width: 1920px;
-  height: 1080px;
-  background: #1A1F3B;
-  transform: translateX(-50%) scale(var(--scale, 1));
-  transform-origin: center top;
-}
-
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 1920px;
+    height: 1080px;
+    background: #1A1F3B;
+    transform: translateX(-50%) scale(var(--scale, 1));
+    transform-origin: center top;
+  }
   /* Center the game canvas (1080x1080) */
   #gameCanvas {
     position: absolute;
@@ -26,10 +25,10 @@
     background: #111;  /* remains unchanged */
     border: 2px solid #2E3B55; /* updated to a dark blue border */
   }
-    body {
-  margin: 0;
-  background: #1A1F3B;
-}
+  body {
+    margin: 0;
+    background: #1A1F3B;
+  }
   /* Stats panel on the left (vertical list) */
   #ui {
     position: absolute;
@@ -75,23 +74,22 @@
     color: #f0f0f0;
     border-radius: 4px;
   }
-    #upgradeMenu button {
-  padding: 10px 20px;
-  font-size: 20px;
-  cursor: pointer;
-  margin: 10px 0;
-  background: #3B4A6B;
-  border: 2px solid #3B4A6B;
-  color: #f0f0f0;
-  border-radius: 4px;
-  transition: background 0.3s ease, transform 0.2s ease;
-}
-#upgradeMenu button:hover {
-  background: #4A5A7A;
-  transform: translateY(-2px);
-}
-</style>
-
+  #upgradeMenu button {
+    padding: 10px 20px;
+    font-size: 20px;
+    cursor: pointer;
+    margin: 10px 0;
+    background: #3B4A6B;
+    border: 2px solid #3B4A6B;
+    color: #f0f0f0;
+    border-radius: 4px;
+    transition: background 0.3s ease, transform 0.2s ease;
+  }
+  #upgradeMenu button:hover {
+    background: #4A5A7A;
+    transform: translateY(-2px);
+  }
+  </style>
 </head>
 <body>
   <div id="container">
@@ -584,300 +582,15 @@
         });
       }
     }
-
-    // Draw planet.
-    function drawPlanet() {
-      if (gameState !== "exploding" && gameState !== "gameover") {
-        ctx.beginPath();
-        ctx.arc(planet.x, planet.y, planet.radius, 0, Math.PI * 2);
-        ctx.fillStyle = "#3498db";
-        ctx.fill();
-      }
-      const barWidth = 80, barHeight = 10;
-      const healthPercent = planetHealth / planetMaxHealth;
-      ctx.fillStyle = "#e74c3c";
-      ctx.fillRect(planet.x - barWidth/2, planet.y - planet.radius - 20, barWidth * healthPercent, barHeight);
-      ctx.strokeStyle = "#fff";
-      ctx.strokeRect(planet.x - barWidth/2, planet.y - planet.radius - 20, barWidth, barHeight);
-      if (gameState === "moonRebuild") {
-        const rebuildBarWidth = 80, rebuildBarHeight = 10;
-        const progress = moonRebuildProgress / config.rebuild.requiredClicks;
-        ctx.fillStyle = "#2ecc71";
-        ctx.fillRect(planet.x - rebuildBarWidth/2, planet.y - planet.radius - 40, rebuildBarWidth * progress, rebuildBarHeight);
-        ctx.strokeStyle = "#fff";
-        ctx.strokeRect(planet.x - rebuildBarWidth/2, planet.y - planet.radius - 40, rebuildBarWidth, rebuildBarHeight);
-        const timeLeft = Math.max(0, config.rebuild.duration - moonRebuildTime);
-        const secondsLeft = (timeLeft / 1000).toFixed(1);
-        ctx.font = "16px sans-serif";
-        ctx.fillStyle = "#fff";
-        ctx.textAlign = "center";
-        ctx.fillText(`Time: ${secondsLeft}s`, planet.x, planet.y - planet.radius - 50);
-      }
-      drawShield();
+    
+    // Update scale based on window dimensions.
+    function updateScale() {
+      const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+      document.documentElement.style.setProperty('--scale', scale);
     }
-
-    // Draw moon.
-    function drawMoon() {
-      if (gameState !== "moonRebuild" && gameState !== "exploding" && gameState !== "gameover") {
-        const moonX = planet.x + moon.orbitRadius * Math.cos(moon.angle);
-        const moonY = planet.y + moon.orbitRadius * Math.sin(moon.angle);
-        ctx.beginPath();
-        ctx.arc(moonX, moonY, moon.radius, 0, Math.PI * 2);
-        ctx.fillStyle = "#bdc3c7";
-        ctx.fill();
-      }
-    }
-
-    // Draw asteroids.
-    function drawAsteroids() {
-      asteroids.forEach(asteroid => {
-        ctx.save();
-        ctx.translate(asteroid.x, asteroid.y);
-        ctx.rotate(asteroid.angle);
-        ctx.beginPath();
-        ctx.moveTo(asteroid.shape[0].x, asteroid.shape[0].y);
-        for (let i = 1; i < asteroid.shape.length; i++) {
-          ctx.lineTo(asteroid.shape[i].x, asteroid.shape[i].y);
-        }
-        ctx.closePath();
-        ctx.fillStyle = "#e74c3c";
-        ctx.fill();
-        ctx.restore();
-      });
-    }
-
-    // Update asteroids.
-    function updateAsteroids(deltaTime) {
-      for (let i = asteroids.length - 1; i >= 0; i--) {
-        const a = asteroids[i];
-        a.x += a.vx;
-        a.y += a.vy;
-        a.angle += a.angularVelocity;
-        if (a.x < -100 || a.x > WIDTH + 100 || a.y < -100 || a.y > HEIGHT + 100) {
-          asteroids.splice(i, 1);
-        }
-      }
-    }
-
-    // Update debris.
-    function updateDebris(deltaTime) {
-      for (let i = debrisPieces.length - 1; i >= 0; i--) {
-        const d = debrisPieces[i];
-        d.x += d.vx;
-        d.y += d.vy;
-        d.angle += d.angularVelocity;
-        d.elapsed += deltaTime;
-        d.scale = Math.max(1 - d.elapsed / d.duration, 0);
-        if (d.elapsed >= d.duration) {
-          debrisPieces.splice(i, 1);
-        }
-      }
-    }
-    function drawDebris() {
-      debrisPieces.forEach(d => {
-        ctx.save();
-        ctx.translate(d.x, d.y);
-        ctx.rotate(d.angle);
-        ctx.scale(d.scale, d.scale);
-        ctx.beginPath();
-        ctx.moveTo(d.shape[0].x, d.shape[0].y);
-        for (let i = 1; i < d.shape.length; i++) {
-          ctx.lineTo(d.shape[i].x, d.shape[i].y);
-        }
-        ctx.closePath();
-        ctx.fillStyle = "#e74c3c";
-        ctx.fill();
-        ctx.restore();
-      });
-    }
-
-    // Update reticles.
-    function updateReticles(deltaTime) {
-      for (let i = reticles.length - 1; i >= 0; i--) {
-        const r = reticles[i];
-        r.elapsed += deltaTime;
-        if (r.elapsed > r.duration) {
-          reticles.splice(i, 1);
-        }
-      }
-    }
-    function drawReticles() {
-      reticles.forEach(r => {
-        const progress = r.elapsed / r.duration;
-        const radius = 10 + progress * 50;
-        const alpha = 1 - progress;
-        ctx.save();
-        ctx.globalAlpha = alpha;
-        ctx.beginPath();
-        ctx.arc(r.x, r.y, radius, 0, Math.PI * 2);
-        ctx.strokeStyle = "#f1c40f";
-        ctx.lineWidth = 3;
-        ctx.stroke();
-        ctx.restore();
-      });
-    }
-
-    // Update the moon.
-    function updateMoon(deltaTime) {
-      if (gameState === "playing") {
-        previousMoonAngle = moon.angle;
-        moon.angle += moon.speed;
-        if (moon.angle >= Math.PI * 2) { moon.angle -= Math.PI * 2; }
-        if (previousMoonAngle > moon.angle) {
-          moonOrbitCount++;
-          if (moonOrbitCount >= config.orbitsPerYear) {
-            gameState = "yearEnd";
-            showUpgradeMenu();
-          }
-        }
-      }
-    }
-
-    // Check collisions.
-    function checkCollisions() {
-      let moonX, moonY;
-      if (gameState !== "moonRebuild") {
-        moonX = planet.x + moon.orbitRadius * Math.cos(moon.angle);
-        moonY = planet.y + moon.orbitRadius * Math.sin(moon.angle);
-      }
-      for (let i = asteroids.length - 1; i >= 0; i--) {
-        const a = asteroids[i];
-        const distToPlanet = Math.hypot(a.x - planet.x, a.y - planet.y);
-        // Shield collision.
-        if (shield) {
-          const shieldRadius = planet.radius + shieldOffset;
-          if (distToPlanet < shieldRadius + a.radius && distToPlanet >= planet.radius) {
-            shield.health -= a.radius;
-            if (shield.health <= 0) {
-              shield = null;
-            } else if (shield.cannons) {
-              shield.cannons = shield.cannons.filter(cannon => {
-                const d = Math.hypot(cannon.x - a.x, cannon.y - a.y);
-                return d >= config.cannon.hitThreshold;
-              });
-            }
-            createExplosion(a.x, a.y, config.explosion.planetHitMultiplier);
-            shakeIntensity += config.shake.planetHit;
-            asteroids.splice(i, 1);
-            continue;
-          }
-        }
-        // Planet collision.
-        if (distToPlanet < planet.radius + a.radius) {
-          if (shield) {
-            shield.health -= a.radius;
-            if (shield.health <= 0) {
-              shield = null;
-            }
-          } else {
-            planetHealth -= a.radius;
-          }
-          createExplosion(a.x, a.y, config.explosion.planetHitMultiplier);
-          shakeIntensity += config.shake.planetHit;
-          asteroids.splice(i, 1);
-          continue;
-        }
-        // Moon collision.
-        if (gameState !== "moonRebuild") {
-          const distToMoon = Math.hypot(a.x - moonX, a.y - moonY);
-          if (distToMoon < moon.radius + a.radius) {
-            gameState = "moonRebuild";
-            moonRebuildTime = 0;
-            moonRebuildProgress = 0;
-            asteroids.splice(i, 1);
-            break;
-          }
-        }
-      }
-      if (planetHealth <= 0 && gameState !== "exploding") {
-        gameState = "exploding";
-        asteroids.length = 0;
-        generatePlanetFragments();
-      }
-    }
-
-    // Update cannons.
-    function updateCannons(deltaTime) {
-      if (shield && shield.cannons) {
-        shield.cannons.forEach(cannon => {
-          cannon.cooldown -= deltaTime;
-          const shieldRadius = planet.radius + shieldOffset;
-          cannon.x = planet.x + shieldRadius * Math.cos(cannon.angle);
-          cannon.y = planet.y + shieldRadius * Math.sin(cannon.angle);
-          if (cannon.cooldown <= 0) {
-            if (!cannon.target) {
-              let nearest = null;
-              let nearestDist = Infinity;
-              for (let i = 0; i < asteroids.length; i++) {
-                const a = asteroids[i];
-                let alreadyTargeted = false;
-                shield.cannons.forEach(other => {
-                  if (other !== cannon && other.target === a) {
-                    alreadyTargeted = true;
-                  }
-                });
-                if (alreadyTargeted) continue;
-                const dist = Math.hypot(cannon.x - a.x, cannon.y - a.y);
-                if (dist < config.cannon.range && dist < nearestDist) {
-                  nearest = a;
-                  nearestDist = dist;
-                }
-              }
-              if (nearest) {
-                cannon.target = nearest;
-                cannon.targetTime = 0;
-              }
-            } else {
-              cannon.targetTime += deltaTime;
-              if (cannon.targetTime >= config.cannon.targetingDelay) {
-                const dist = Math.hypot(cannon.x - cannon.target.x, cannon.y - cannon.target.y);
-                if (dist < config.cannon.range) {
-                  shatterAsteroid(cannon.target);
-                  for (let i = 0; i < asteroids.length; i++) {
-                    if (asteroids[i] === cannon.target) {
-                      asteroids.splice(i, 1);
-                      break;
-                    }
-                  }
-                  cannon.cooldown = config.cannon.cooldownTime;
-                }
-                cannon.target = null;
-              }
-            }
-          }
-        });
-      }
-    }
-    function drawCannons() {
-      if (shield && shield.cannons) {
-        shield.cannons.forEach(cannon => {
-          ctx.save();
-          ctx.globalAlpha = (cannon.cooldown > 0) ? 0.5 : 1;
-          ctx.fillStyle = "#ff0";
-          ctx.beginPath();
-          ctx.arc(cannon.x, cannon.y, 5, 0, Math.PI * 2);
-          ctx.fill();
-          if (cannon.target && cannon.targetTime < config.cannon.targetingDelay) {
-            ctx.strokeStyle = "#ff0";
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(cannon.x, cannon.y);
-            ctx.lineTo(cannon.target.x, cannon.target.y);
-            ctx.stroke();
-          }
-          ctx.restore();
-        });
-      }
-    }
-	
-		function updateScale() {
-	  // Calculate scale based on window dimensions. You might choose the smaller of the two ratios.
-	  const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
-	  document.documentElement.style.setProperty('--scale', scale);
-	}
-	updateScale();
-	window.addEventListener('resize', updateScale);
-	
+    updateScale();
+    window.addEventListener('resize', updateScale);
+    
     // Main game loop.
     function gameLoop(timestamp) {
       const deltaTime = timestamp - lastTime;
@@ -1012,8 +725,10 @@
     // Handle canvas clicks.
     canvas.addEventListener("click", function(e) {
       const rect = canvas.getBoundingClientRect();
-      const clickX = e.clientX - rect.left;
-      const clickY = e.clientY - rect.top;
+      // Adjust mouse coordinates by the current scale.
+      const scale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--scale')) || 1;
+      const clickX = (e.clientX - rect.left) / scale;
+      const clickY = (e.clientY - rect.top) / scale;
       addReticle(clickX, clickY);
       if (gameState === "playing" || gameState === "moonRebuild") {
         for (let i = asteroids.length - 1; i >= 0; i--) {
