@@ -94,12 +94,12 @@
       moon: {
         radius: 15,
         orbitRadius: 100,
-        speed: 0.02
+        speed: 0.01
       },
       // Game progression.
-      orbitsPerYear: 36,  // One orbit equals one "day".
-      baseAsteroidSpawnInterval: 1000, // ms.
-      minAsteroidSpawnInterval: 400,
+      orbitsPerYear: 15,  // One orbit equals one "day".
+      baseAsteroidSpawnInterval: 1200, // ms.
+      minAsteroidSpawnInterval: 200,
       // Asteroid settings.
       asteroid: {
         speedRange: [0.5, 1.5],
@@ -121,8 +121,8 @@
       },
       // Screen shake.
       shake: {
-        asteroidHit: 5,
-        planetHit: 15
+        asteroidHit: 10,
+        planetHit: 20
       },
       // Explosion effect.
       explosion: {
@@ -135,7 +135,7 @@
       },
       // Comet settings.
       comet: {
-        spawnProbability: 0.0002,
+        spawnProbability: 0.0005,
         speedRange: [4, 6],
         lengthRange: [30, 50],
         life: 2000
@@ -143,18 +143,18 @@
       // Upgrade costs.
       upgrades: {
         restoreHealthCostPerPoint: 1,
-        increaseMaxHealthCost: 50,
+        increaseMaxHealthCost: 100,
         increaseMaxHealthBonus: 20,
-        buyShieldCost: 100,
-        restoreShieldCost: 50,
-        buyCannonCost: 25
+        buyShieldCost: 200,
+        restoreShieldCost: 100,
+        buyCannonCost: 150
       },
       // Cannon settings.
       cannon: {
         cooldownTime: 5000,    // ms delay between shots.
-        range: 150,            // Targeting range.
+        range: 200,            // Targeting range.
         hitThreshold: 20,      // Impact detection radius for cannon destruction.
-        targetingDelay: 300    // ms delay before firing after acquiring target.
+        targetingDelay: 400    // ms delay before firing after acquiring target.
       }
     };
     /**************************************************************/
