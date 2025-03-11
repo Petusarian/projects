@@ -6,12 +6,17 @@
   <style>
   /* Overall container for a 1920x1080 view */
   #container {
-    position: relative;
-    width: 1920px;
-    height: 1080px;
-    margin: 0 auto;
-    background: #1A1F3B; /* dark blue background */
-  }
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 1920px;
+  height: 1080px;
+  background: #1A1F3B;
+  /* Translate to center then scale based on a CSS variable */
+  transform: translate(-50%, -50%) scale(var(--scale, 1));
+  /* Optional: set transform-origin to center (or adjust as needed) */
+  transform-origin: center;
+}
   /* Center the game canvas (1080x1080) */
   #gameCanvas {
     position: absolute;
@@ -85,24 +90,6 @@
 #upgradeMenu button:hover {
   background: #4A5A7A;
   transform: translateY(-2px);
-}
-    /* Default styling for desktop (keeps your 1920x1080 container) */
-#container {
-  position: relative;
-  width: 1920px;
-  height: 1080px;
-  margin: 0 auto;
-  background: #1A1F3B;
-}
-
-/* On smaller screens, scale down the container */
-@media (max-width: 600px) {
-  #container {
-    transform: scale(0.3);
-    transform-origin: top center;
-    /* Optionally, adjust margin if needed */
-    margin: 0 auto;
-  }
 }
 </style>
 
@@ -883,7 +870,15 @@
         });
       }
     }
-
+	
+		function updateScale() {
+	  // Calculate scale based on window dimensions. You might choose the smaller of the two ratios.
+	  const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+	  document.documentElement.style.setProperty('--scale', scale);
+	}
+	updateScale();
+	window.addEventListener('resize', updateScale);
+	
     // Main game loop.
     function gameLoop(timestamp) {
       const deltaTime = timestamp - lastTime;
