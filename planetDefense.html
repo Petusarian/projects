@@ -7,16 +7,15 @@
   /* Overall container for a 1920x1080 view */
   #container {
   position: absolute;
-  top: 50%;
+  top: 0;
   left: 50%;
   width: 1920px;
   height: 1080px;
   background: #1A1F3B;
-  /* Translate to center then scale based on a CSS variable */
-  transform: translate(-50%, -50%) scale(var(--scale, 1));
-  /* Optional: set transform-origin to center (or adjust as needed) */
+  transform: translateX(-50%) scale(var(--scale, 1));
   transform-origin: center top;
 }
+
   /* Center the game canvas (1080x1080) */
   #gameCanvas {
     position: absolute;
