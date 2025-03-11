@@ -13,9 +13,16 @@
   }
   /* Game container */
   #gameContainer {
-    position: relative;
-    width: 1280px;
-    margin: 0 auto;
+    position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 1280px;
+  height: 720px;
+  background: #1A1F3B;
+  /* Translate to center then scale based on a CSS variable */
+  transform: translate(-50%, -50%) scale(var(--scale, 1));
+  /* Optional: set transform-origin to center (or adjust as needed) */
+  transform-origin: center;
   }
   canvas {
     display: block;
@@ -84,24 +91,6 @@
     background: #4A5A7A;
     transform: translateY(-2px);
   }
-    /* Default styling for desktop (keeps your 1920x1080 container) */
-#container {
-  position: relative;
-  width: 1920px;
-  height: 1080px;
-  margin: 0 auto;
-  background: #1A1F3B;
-}
-
-/* On smaller screens, scale down the container */
-@media (max-width: 600px) {
-  #container {
-    transform: scale(0.3);
-    transform-origin: top center;
-    /* Optionally, adjust margin if needed */
-    margin: 0 auto;
-  }
-}
 </style>
 
 </head>
@@ -563,6 +552,16 @@
 
     updateImpacts(deltaTime);
   }
+
+
+function updateScale() {
+  const scale = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
+  document.documentElement.style.setProperty('--scale', scale);
+}
+
+updateScale();
+window.addEventListener('resize', updateScale);
+
 
   // Main draw
   function draw() {
