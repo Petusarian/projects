@@ -84,6 +84,24 @@
     background: #4A5A7A;
     transform: translateY(-2px);
   }
+    /* Default styling for desktop (keeps your 1920x1080 container) */
+#container {
+  position: relative;
+  width: 1920px;
+  height: 1080px;
+  margin: 0 auto;
+  background: #1A1F3B;
+}
+
+/* On smaller screens, scale down the container */
+@media (max-width: 600px) {
+  #container {
+    transform: scale(0.3);
+    transform-origin: top center;
+    /* Optionally, adjust margin if needed */
+    margin: 0 auto;
+  }
+}
 </style>
 
 </head>
