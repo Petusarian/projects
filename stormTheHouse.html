@@ -13,16 +13,15 @@
   }
   /* Game container */
   #gameContainer {
-  position: absolute;
-  top: 0;
-  left: 50%;
-  width: 1280px;
-  height: 720px;
-  background: #1A1F3B;
-  transform: translateX(-50%) scale(var(--scale, 1));
-  transform-origin: center top;
-}
-
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 1280px;
+    height: 720px;
+    background: #1A1F3B;
+    transform: translateX(-50%) scale(var(--scale, 1));
+    transform-origin: center top;
+  }
   canvas {
     display: block;
     background: #2E3B55; /* Dark blue canvas background */
@@ -90,8 +89,7 @@
     background: #4A5A7A;
     transform: translateY(-2px);
   }
-</style>
-
+  </style>
 </head>
 <body>
 <div id="gameContainer">
@@ -152,10 +150,10 @@
     width: 80,
     height: 80
   };
-  let hasGunman = false;         // If true, the gunman is hired
-  let gunmanShootCooldown = 0;   // ms until next shot
-  const gunmanRange = 400;       // range to shoot enemies
-  const gunmanCooldownTime = 1000; // 1 second between shots
+  let hasGunman = false;
+  let gunmanShootCooldown = 0;
+  const gunmanRange = 400;
+  const gunmanCooldownTime = 1000;
 
   // Wall
   let wallMaxHealth = 100;
@@ -170,11 +168,10 @@
   // Ammo
   let playerMaxAmmo = 10;
   let ammo = playerMaxAmmo;
-  const reloadTime = 2000; // ms
+  const reloadTime = 2000;
   let isReloading = false;
   let reloadInterval = null;
 
-  // Automatic reload
   function autoReload() {
     if (ammo <= 0 && !isReloading) {
       isReloading = true;
@@ -204,98 +201,44 @@
   let shakeTime = 0;
   function triggerShake() { shakeTime = 300; }
 
-  // Impact Effects (for the gunshot visuals)
+  // Impact Effects
   const impactDuration = 300;
   let impacts = [];
 
   // Enemy definitions
-  // "unpredictable" means they wiggle around each frame
-  // Each type has different speed, HP, size
   const ENEMY_TYPES = [
-    {
-      name: "normal",
-      width: 40, height: 40,
-      baseSpeed: 0.8,
-      health: 1,
-      unpredictable: false
-    },
-    {
-      name: "big",
-      width: 60, height: 60,
-      baseSpeed: 0.4,
-      health: 3,
-      unpredictable: false
-    },
-    {
-      name: "small",
-      width: 20, height: 20,
-      baseSpeed: 1.2,
-      health: 1,
-      unpredictable: false
-    },
-    {
-      name: "unpredictable",
-      width: 30, height: 30,
-      baseSpeed: 0.8,
-      health: 2,
-      unpredictable: true
-    }
+    { name: "normal", width: 40, height: 40, baseSpeed: 0.8, health: 1, unpredictable: false },
+    { name: "big", width: 60, height: 60, baseSpeed: 0.4, health: 3, unpredictable: false },
+    { name: "small", width: 20, height: 20, baseSpeed: 1.2, health: 1, unpredictable: false },
+    { name: "unpredictable", width: 30, height: 30, baseSpeed: 0.8, health: 2, unpredictable: true }
   ];
 
-  // Weighted spawn logic by day
-  // For earlier days, mostly normal; for later days, more variety
   function pickEnemyType() {
-    // day can be from 1..maxDays
-    // We'll create a weighting system that uses day to shift spawns
-    // Example approach: the later the day, the more chance for bigger or special enemies
-    // This is just a simplistic approach
     let possible = [];
     if (day <= 2) {
-      // mostly normal, a small chance of big, small, or unpredictable
-      possible.push(ENEMY_TYPES[0], ENEMY_TYPES[0], ENEMY_TYPES[0]); // normal repeated
-      possible.push(ENEMY_TYPES[1]); // big
-      possible.push(ENEMY_TYPES[2]); // small
-      possible.push(ENEMY_TYPES[3]); // unpredictable
+      possible.push(ENEMY_TYPES[0], ENEMY_TYPES[0], ENEMY_TYPES[0], ENEMY_TYPES[1], ENEMY_TYPES[2], ENEMY_TYPES[3]);
     } else {
-      // more variety
-      possible.push(ENEMY_TYPES[0], ENEMY_TYPES[0]); // normal
-      possible.push(ENEMY_TYPES[1], ENEMY_TYPES[1]); // big repeated
-      possible.push(ENEMY_TYPES[2], ENEMY_TYPES[2]); // small repeated
-      possible.push(ENEMY_TYPES[3], ENEMY_TYPES[3]); // unpredictable repeated
+      possible.push(ENEMY_TYPES[0], ENEMY_TYPES[0], ENEMY_TYPES[1], ENEMY_TYPES[1], ENEMY_TYPES[2], ENEMY_TYPES[2], ENEMY_TYPES[3], ENEMY_TYPES[3]);
     }
-    // pick random from possible
     return possible[Math.floor(Math.random() * possible.length)];
   }
 
-  // Our enemies array
   let enemies = [];
-
-  // We'll define how each enemy is stored:
-  // { x, y, width, height, attacking, attackTimer, rotation, dying, deathTimer,
-  //   health, speed, directionAngle, typeName, unpredictable }
-
-  // Attack cycle for punching the wall
   const attackCycle = 800;
   const maxPunchRotation = 0.3;
-
-  // Death effect
   const deathDuration = 300;
 
-  // For unpredictable movement
   function randomAngleChange() {
-    // small random angle shift
     return (Math.random() - 0.5) * 0.2;
   }
 
   let lastEnemySpawn = Date.now();
 
-  // Start game
   startButton.addEventListener("click", () => {
     startScreen.style.display = "none";
     startTransition();
   });
 
-  // Upgrades
   buyAmmoUpgradeButton.addEventListener("click", () => {
     if (money >= 50) {
       money -= 50;
@@ -307,7 +250,6 @@
     if (money >= 50) {
       money -= 50;
       wallMaxHealth += 50;
-      // also heal the wall up to new max
       wallHealth = wallMaxHealth;
       moneyDisplay.textContent = "Money: $" + money;
     }
@@ -325,7 +267,7 @@
     startTransition();
   });
 
-  // Shooting: create an impact effect, check if an enemy is clicked
+  // Updated click event to account for scaling.
   canvas.addEventListener("click", (e) => {
     if (gameState !== "running") return;
     if (isReloading || ammo <= 0) {
@@ -333,8 +275,9 @@
       return;
     }
     const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
+    const scale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--scale')) || 1;
+    const mouseX = (e.clientX - rect.left) / scale;
+    const mouseY = (e.clientY - rect.top) / scale;
 
     let hitEnemy = null;
     for (let i = 0; i < enemies.length; i++) {
@@ -350,10 +293,9 @@
       if (hitEnemy.health <= 0) {
         hitEnemy.dying = true;
         hitEnemy.deathTimer = deathDuration;
-        money += 10; // kill reward
+        money += 10;
       }
     }
-    // Impact effect at click position
     impacts.push({
       x: mouseX,
       y: mouseY,
@@ -365,7 +307,6 @@
     ammo--;
   });
 
-  // Transition to a new day
   function startTransition() {
     gameState = "transition";
     transitionTimer = transitionDuration;
@@ -376,17 +317,14 @@
     impacts = [];
   }
 
-  // Spawning new enemy
   function spawnEnemy() {
     const type = pickEnemyType();
     const enemyHeight = type.height;
     const enemyY = Math.random() * (CANVAS_HEIGHT - 2 * PADDING - enemyHeight) + PADDING;
-
-    let dirAngle = 0; // for unpredictable
+    let dirAngle = 0;
     if (type.unpredictable) {
       dirAngle = Math.random() * Math.PI * 2;
     }
-
     enemies.push({
       x: PADDING - 50,
       y: enemyY,
@@ -406,15 +344,12 @@
     enemiesSpawned++;
   }
 
-  // Gunman logic: if hasGunman, every second we pick an enemy in range and deal 1 HP
   function updateGunman(deltaTime) {
     if (!hasGunman) return;
     gunmanShootCooldown -= deltaTime;
     if (gunmanShootCooldown <= 0) {
-      // find an enemy in range
       let gx = player.x + player.width / 2;
       let gy = player.y + player.height / 2;
-      // pick the first living enemy in range
       for (let i = 0; i < enemies.length; i++) {
         let en = enemies[i];
         if (!en.dying) {
@@ -422,9 +357,7 @@
           let ey = en.y + en.height / 2;
           let dist = Math.hypot(gx - ex, gy - ey);
           if (dist < gunmanRange) {
-            // shoot this enemy
             en.health--;
-            // create an impact effect at the enemy center
             impacts.push({
               x: ex,
               y: ey,
@@ -436,18 +369,16 @@
             if (en.health <= 0) {
               en.dying = true;
               en.deathTimer = deathDuration;
-              money += 10; // reward for gunman kill
+              money += 10;
             }
-            // reset cooldown
             gunmanShootCooldown = gunmanCooldownTime;
-            break; // only shoot one enemy at a time
+            break;
           }
         }
       }
     }
   }
 
-  // Impact update
   function updateImpacts(deltaTime) {
     impacts = impacts.filter(impact => {
       impact.remainingTime -= deltaTime;
@@ -455,21 +386,16 @@
     });
   }
 
-  // Main update
   function update(deltaTime) {
     if (gameState === "running") {
       autoReload();
       updateGunman(deltaTime);
-
-      // spawn new enemies
       if (enemiesSpawned < enemiesToSpawn) {
         if (Date.now() - lastEnemySpawn > 1500) {
           spawnEnemy();
           lastEnemySpawn = Date.now();
         }
       }
-
-      // update enemies
       enemies.forEach((enemy, index) => {
         if (enemy.dying) {
           enemy.deathTimer -= deltaTime;
@@ -479,34 +405,27 @@
             enemies.splice(index, 1);
           }
         } else {
-          // if unpredictable, random angle shift
           if (enemy.unpredictable) {
-  // Move consistently toward the wall (rightwards)
-  enemy.x += enemy.speed;
-  // Add small random variation in the Y axis
-  enemy.y += (Math.random() - 0.5) * 10; // adjust multiplier as needed
-  // Clamp Y position within allowed bounds
-  if (enemy.y < PADDING) enemy.y = PADDING;
-  if (enemy.y + enemy.height > CANVAS_HEIGHT - PADDING) {
-    enemy.y = CANVAS_HEIGHT - PADDING - enemy.height;
-  }
-  // Check if enemy reached the wall
-  if (enemy.x + enemy.width >= wall.x) {
-    enemy.x = wall.x - enemy.width;
-    enemy.attacking = true;
-    enemy.attackTimer += deltaTime;
-    enemy.rotation = maxPunchRotation * Math.sin(Math.PI * (enemy.attackTimer / attackCycle));
-    if (enemy.attackTimer >= attackCycle) {
-      wallHealth -= 10;
-      enemy.attackTimer = 0;
-    }
-  }
+            enemy.x += enemy.speed;
+            enemy.y += (Math.random() - 0.5) * 10;
+            if (enemy.y < PADDING) enemy.y = PADDING;
+            if (enemy.y + enemy.height > CANVAS_HEIGHT - PADDING) {
+              enemy.y = CANVAS_HEIGHT - PADDING - enemy.height;
+            }
+            if (enemy.x + enemy.width >= wall.x) {
+              enemy.x = wall.x - enemy.width;
+              enemy.attacking = true;
+              enemy.attackTimer += deltaTime;
+              enemy.rotation = maxPunchRotation * Math.sin(Math.PI * (enemy.attackTimer / attackCycle));
+              if (enemy.attackTimer >= attackCycle) {
+                wallHealth -= 10;
+                enemy.attackTimer = 0;
+              }
+            }
           } else {
-            // normal movement
             if (enemy.x + enemy.width < wall.x) {
               enemy.x += enemy.speed;
             } else {
-              // clamp and punch
               enemy.x = wall.x - enemy.width;
               enemy.attacking = true;
               enemy.attackTimer += deltaTime;
@@ -519,8 +438,6 @@
           }
         }
       });
-
-      // wave end check
       if (enemies.length === 0 && enemiesSpawned >= enemiesToSpawn) {
         if (day < maxDays) {
           gameState = "upgrade";
@@ -535,63 +452,58 @@
       if (transitionTimer <= 0) {
         gameState = "running";
         ammo = playerMaxAmmo;
-        wallHealth = Math.min(wallHealth, wallMaxHealth); // ensure not above max
+        wallHealth = Math.min(wallHealth, wallMaxHealth);
         lastEnemySpawn = Date.now();
       }
     }
-
     if (shakeTime > 0) {
       shakeTime -= deltaTime;
       if (shakeTime < 0) shakeTime = 0;
     }
-
     if (wallHealth <= 0) {
       gameState = "gameover";
     }
-
     updateImpacts(deltaTime);
   }
 
+  function updateScale() {
+    const scale = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
+    document.documentElement.style.setProperty('--scale', scale);
+  }
+  updateScale();
+  window.addEventListener('resize', updateScale);
 
-function updateScale() {
-  const scale = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
-  document.documentElement.style.setProperty('--scale', scale);
-}
+  let lastTime = 0;
+  function gameLoop(timestamp) {
+    const deltaTime = timestamp - lastTime;
+    lastTime = timestamp;
+    if (gameState !== "gameover" && gameState !== "win") {
+      update(deltaTime);
+    }
+    draw();
+    requestAnimationFrame(gameLoop);
+  }
 
-updateScale();
-window.addEventListener('resize', updateScale);
-
-
-
-  // Main draw
   function draw() {
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
     if (gameState === "running" || gameState === "transition" || gameState === "upgrade") {
-      // Draw player (just for reference)
       ctx.fillStyle = "#00AA00";
       ctx.fillRect(player.x, player.y, player.width, player.height);
-
-      // Draw wall
       ctx.fillStyle = "#006400";
       ctx.fillRect(wall.x, wall.y, wall.width, wall.height);
       ctx.fillStyle = "#FFFFFF";
       ctx.font = "18px sans-serif";
       ctx.textAlign = "center";
       ctx.fillText("Wall Health: " + Math.max(0, Math.floor(wallHealth)) + " / " + wallMaxHealth, wall.x + wall.width / 2, wall.y - 10);
-
-      // Draw enemies
       enemies.forEach(enemy => {
         ctx.save();
         if (enemy.dying) {
-          // shake effect
           const offsetX = (Math.random() - 0.5) * 10;
           const offsetY = (Math.random() - 0.5) * 10;
           ctx.translate(enemy.x + enemy.width / 2 + offsetX, enemy.y + enemy.height / 2 + offsetY);
           ctx.fillStyle = "#FF0000";
           ctx.fillRect(-enemy.width / 2, -enemy.height / 2, enemy.width, enemy.height);
         } else if (enemy.attacking) {
-          // punch rotation
           ctx.translate(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
           ctx.rotate(enemy.rotation);
           ctx.fillStyle = "#FF0000";
@@ -602,8 +514,6 @@ window.addEventListener('resize', updateScale);
         }
         ctx.restore();
       });
-
-      // Draw impacts
       impacts.forEach(impact => {
         const alpha = impact.remainingTime / impact.duration;
         const currentRadius = impact.radius + (impact.maxRadius - impact.radius) * (1 - alpha);
@@ -612,8 +522,6 @@ window.addEventListener('resize', updateScale);
         ctx.arc(impact.x, impact.y, currentRadius, 0, Math.PI * 2);
         ctx.fill();
       });
-
-      // Draw Ammo Bar
       const ammoBarWidth = 200;
       const ammoBarHeight = 30;
       const ammoX = 20;
@@ -627,21 +535,16 @@ window.addEventListener('resize', updateScale);
       ctx.font = "20px sans-serif";
       ctx.textAlign = "center";
       ctx.fillText(ammo + " / " + playerMaxAmmo, ammoX + ammoBarWidth / 2, ammoY + ammoBarHeight - 5);
-
-      // Additional UI text below ammo bar
       ctx.fillStyle = "#FFFFFF";
       ctx.font = "18px sans-serif";
       ctx.textAlign = "left";
-
-      let textY = ammoY + ammoBarHeight + 30; // space below ammo bar
-
+      let textY = ammoY + ammoBarHeight + 30;
       ctx.fillText("Money: $" + money, ammoX, textY);
       textY += 25;
       ctx.fillText("Day: " + day + " / " + maxDays, ammoX, textY);
       textY += 25;
       ctx.fillText("Enemies Remaining: " + ((enemiesToSpawn - enemiesSpawned) + enemies.length), ammoX, textY);
     }
-
     if (gameState === "transition") {
       ctx.fillStyle = "rgba(0,0,0,0.8)";
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -650,7 +553,6 @@ window.addEventListener('resize', updateScale);
       ctx.textAlign = "center";
       ctx.fillText(transitionMessage, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
     }
-
     if (gameState === "gameover") {
       ctx.fillStyle = "#FF0000";
       ctx.font = "40px sans-serif";
@@ -662,18 +564,6 @@ window.addEventListener('resize', updateScale);
       ctx.textAlign = "center";
       ctx.fillText("YOU WIN!", CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
     }
-  }
-
-  // Main loop
-  let lastTime = 0;
-  function gameLoop(timestamp) {
-    const deltaTime = timestamp - lastTime;
-    lastTime = timestamp;
-    if (gameState !== "gameover" && gameState !== "win") {
-      update(deltaTime);
-    }
-    draw();
-    requestAnimationFrame(gameLoop);
   }
 
   requestAnimationFrame(gameLoop);
