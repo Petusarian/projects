@@ -94,12 +94,12 @@
       moon: {
         radius: 15,
         orbitRadius: 100,
-        speed: 0.01
+        speed: 0.02
       },
       // Game progression.
-      orbitsPerYear: 15,  // One orbit equals one "day".
-      baseAsteroidSpawnInterval: 1200, // ms.
-      minAsteroidSpawnInterval: 200,
+      orbitsPerYear: 36,  // One orbit equals one "day".
+      baseAsteroidSpawnInterval: 1000, // ms.
+      minAsteroidSpawnInterval: 400,
       // Asteroid settings.
       asteroid: {
         speedRange: [0.5, 1.5],
@@ -112,7 +112,7 @@
       },
       // Debris settings.
       debris: {
-        duration: 500 // ms.
+        duration: 1000 // ms.
       },
       // Moon rebuild settings.
       rebuild: {
@@ -121,8 +121,8 @@
       },
       // Screen shake.
       shake: {
-        asteroidHit: 10,
-        planetHit: 20
+        asteroidHit: 5,
+        planetHit: 15
       },
       // Explosion effect.
       explosion: {
@@ -135,24 +135,24 @@
       },
       // Comet settings.
       comet: {
-        spawnProbability: 0.0005,
+        spawnProbability: 0.0002,
         speedRange: [4, 6],
         lengthRange: [30, 50],
         life: 2000
       },
       // Upgrade costs.
       upgrades: {
-        restoreHealthCostPerPoint: 2,
-        increaseMaxHealthCost: 100,
-        increaseMaxHealthBonus: 50,
-        buyShieldCost: 200,
-        restoreShieldCost: 100,
-        buyCannonCost: 125
+        restoreHealthCostPerPoint: 1,
+        increaseMaxHealthCost: 50,
+        increaseMaxHealthBonus: 20,
+        buyShieldCost: 100,
+        restoreShieldCost: 50,
+        buyCannonCost: 25
       },
       // Cannon settings.
       cannon: {
         cooldownTime: 5000,    // ms delay between shots.
-        range: 200,            // Targeting range.
+        range: 150,            // Targeting range.
         hitThreshold: 20,      // Impact detection radius for cannon destruction.
         targetingDelay: 300    // ms delay before firing after acquiring target.
       }
@@ -923,9 +923,7 @@
         optionsHTML += `<button onclick="upgradeBuyShield()">Buy Shield (Cost: ${config.upgrades.buyShieldCost} Shards)</button><br>`;
       } else {
         optionsHTML += `<button onclick="upgradeRestoreShield()">Restore Shield (Cost: ${config.upgrades.restoreShieldCost} Shards)</button><br>`;
-        if (shield.cannons.length < 20) {
-          optionsHTML += `<button onclick="upgradeBuyCannon()">Buy Cannon (Cost: ${config.upgrades.buyCannonCost} Shards)</button><br>`;
-        }
+        optionsHTML += `<button onclick="upgradeBuyCannon()">Buy Cannon (Cost: ${config.upgrades.buyCannonCost} Shards)</button><br>`;
       }
       upgradeOptionsDiv.innerHTML = optionsHTML;
     }
@@ -963,7 +961,7 @@
       }
     }
     function upgradeBuyCannon() {
-      if (shield && shield.cannons.length < 20 && shards >= config.upgrades.buyCannonCost) {
+      if (shield && shards >= config.upgrades.buyCannonCost) {
         shards -= config.upgrades.buyCannonCost;
         const cannon = { angle: random(0, Math.PI * 2), cooldown: 0, x: 0, y: 0, target: null, targetTime: 0 };
         shield.cannons.push(cannon);
