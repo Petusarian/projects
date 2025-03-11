@@ -4,104 +4,124 @@
   <meta charset="UTF-8">
   <title>Configurable Tug of War Game</title>
   <style>
-    body {
-      margin: 0;
-      font-family: sans-serif;
-      background: #f0f0f0;
-    }
-    /* Container holds the game area and side menu */
-    #container {
-      display: flex;
-      justify-content: center;
-      align-items: flex-start;
-      margin: 20px;
-    }
-    /* Game area styling */
-    #game {
-      position: relative;
-      width: 800px;
-      height: 400px;
-      background: #eef;
-      border: 2px solid #333;
-      overflow: hidden;
-      margin-right: 20px;
-    }
-    /* Side menu styling */
-    #menu {
-      width: 250px;
-      background: #fff;
-      border: 2px solid #333;
-      padding: 10px;
-    }
-    #menu h2, #menu h3 {
-      margin-top: 0;
-    }
-    .unit-config {
-      margin-bottom: 15px;
-      padding-bottom: 10px;
-      border-bottom: 1px solid #ccc;
-    }
-    .unit-config label {
-      font-size: 14px;
-    }
-    .unit-config input {
-      width: 60px;
-      margin-left: 5px;
-    }
-    button {
-      margin: 5px 0;
-      padding: 8px 12px;
-      font-size: 16px;
-      cursor: pointer;
-    }
-    /* Sun button styled as a sun */
-    #sun {
-      width: 50px;
-      height: 50px;
-      background: yellow;
-      border: 2px solid #ccc;
-      border-radius: 50%;
-      font-size: 16px;
-      line-height: 46px;
-      text-align: center;
-      display: inline-block;
-      cursor: pointer;
-    }
-    /* Health text is centered in each unit */
-    .unit {
-      position: absolute;
-      border-radius: 50%;
-      transition: transform 0.2s;
-      text-align: center;
-      font-weight: bold;
-      color: white;
-      user-select: none;
-    }
-    /* Friendly and enemy unit colors */
-    .player { background: blue; }
-    .enemy { background: red; }
-    /* Base styles */
-    .base {
-      position: absolute;
-      width: 40px;
-      height: 100%;
-      top: 0;
-      opacity: 0.5;
-      text-align: center;
-      color: white;
-      font-weight: bold;
-      z-index: 1;
-    }
-    #playerBase { left: 0; background: green; }
-    #enemyBase { right: 0; background: purple; }
-    /* Pulsate animation for combat/attacking units */
-    @keyframes pulsate {
-      0% { transform: scale(1); }
-      50% { transform: scale(1.2); }
-      100% { transform: scale(1); }
-    }
-    .pulsate { animation: pulsate 0.5s infinite; }
-  </style>
+  body {
+    margin: 0;
+    font-family: 'Segoe UI', sans-serif;
+    background: #1A1F3B;
+    color: #f0f0f0;
+  }
+  /* Container holds the game area and side menu */
+  #container {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    margin: 20px;
+  }
+  /* Game area styling */
+  #game {
+    position: relative;
+    width: 800px;
+    height: 400px;
+    background: #2E3B55;
+    border: 2px solid #3B4A6B;
+    overflow: hidden;
+    margin-right: 20px;
+    border-radius: 4px;
+  }
+  /* Side menu styling */
+  #menu {
+    width: 250px;
+    background: #2E3B55;
+    border: 2px solid #3B4A6B;
+    padding: 10px;
+    border-radius: 4px;
+  }
+  #menu h2, #menu h3 {
+    margin-top: 0;
+    color: #f0f0f0;
+  }
+  .unit-config {
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #3B4A6B;
+  }
+  .unit-config label {
+    font-size: 14px;
+  }
+  .unit-config input {
+    width: 60px;
+    margin-left: 5px;
+    background: #1A1F3B;
+    color: #f0f0f0;
+    border: 1px solid #3B4A6B;
+    border-radius: 2px;
+    padding: 2px 4px;
+  }
+  button {
+    margin: 5px 0;
+    padding: 8px 12px;
+    font-size: 16px;
+    cursor: pointer;
+    background: #3B4A6B;
+    border: 1px solid #3B4A6B;
+    color: #f0f0f0;
+    border-radius: 4px;
+    transition: background 0.3s ease, transform 0.2s ease;
+  }
+  button:hover {
+    background: #4A5A7A;
+    transform: translateY(-2px);
+  }
+  /* Sun button styled as a sun */
+  #sun {
+    width: 50px;
+    height: 50px;
+    background: yellow;
+    border: 2px solid #3B4A6B;
+    border-radius: 50%;
+    font-size: 16px;
+    line-height: 46px;
+    text-align: center;
+    display: inline-block;
+    cursor: pointer;
+  }
+  /* Health text is centered in each unit */
+  .unit {
+    position: absolute;
+    border-radius: 50%;
+    transition: transform 0.2s;
+    text-align: center;
+    font-weight: bold;
+    color: #f0f0f0;
+    user-select: none;
+  }
+  /* Friendly and enemy unit colors */
+  .player { background: #3B82F6; }
+  .enemy { background: #EF4444; }
+  /* Base styles */
+  .base {
+    position: absolute;
+    width: 40px;
+    height: 100%;
+    top: 0;
+    opacity: 0.7;
+    text-align: center;
+    color: #f0f0f0;
+    font-weight: bold;
+    z-index: 1;
+    border-radius: 4px;
+  }
+  #playerBase { left: 0; background: #10B981; }
+  #enemyBase { right: 0; background: #8B5CF6; }
+  /* Pulsate animation for combat/attacking units */
+  @keyframes pulsate {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+  }
+  .pulsate { animation: pulsate 0.5s infinite; }
+</style>
+
 </head>
 <body>
   <div id="container">
