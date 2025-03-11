@@ -12,9 +12,15 @@
       background: #1A1F3B;
       color: #f0f0f0;
     }
-    h1 {
+    /* Replace header text with a centered clickable image */
+    .header-image {
       text-align: center;
       margin-bottom: 20px;
+    }
+    .header-image img {
+      width: 100px;
+      height: 100px;
+      cursor: pointer;
     }
 
     /* Tab navigation styling */
@@ -73,7 +79,11 @@
   </style>
 </head>
 <body>
-  <h1>My Games</h1>
+  <div class="header-image">
+    <a href="https://petardia.com" target="_blank">
+      <img src="PetardiaProductions_Logo_Black.png" alt="Petardia Productions Logo">
+    </a>
+  </div>
   <div class="tabs">
     <div class="tab active" data-tab="pd">Planet Defense</div>
     <div class="tab" data-tab="space">Storm The House</div>
