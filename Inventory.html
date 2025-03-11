@@ -4,64 +4,84 @@
   <meta charset="UTF-8">
   <title>Inventory System Demo</title>
   <style>
-    body {
-      font-family: sans-serif;
-      padding: 20px;
-    }
-    /* Container holds left (inventory + hotbar) and right (container grid) */
-    #inventoryContainer {
-      display: flex;
-      gap: 20px;
-    }
-    .left-panel {
-      display: flex;
-      flex-direction: column;
-    }
-    /* Grid styles */
-    .grid.inventory {
-      display: grid;
-      grid-template-columns: repeat(4, 60px);
-      grid-gap: 5px;
-    }
-    .grid.hotbar {
-      display: grid;
-      grid-template-columns: repeat(5, 60px);
-      grid-gap: 5px;
-      margin-top: 10px;
-    }
-    .grid.container {
-      display: grid;
-      grid-template-columns: repeat(3, 60px);
-      grid-gap: 5px;
-    }
-    .slot {
-      width: 60px;
-      height: 60px;
-      border: 1px solid #aaa;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: #f9f9f9;
-      user-select: none;
-      cursor: pointer;
-      position: relative;
-    }
-    /* Floating drag element */
-    #draggingItem {
-      position: absolute;
-      pointer-events: none;
-      background: rgba(200,200,200,0.9);
-      border: 1px solid #333;
-      padding: 5px;
-      border-radius: 3px;
-      font-size: 14px;
-      z-index: 1000;
-    }
-    button {
-      margin-right: 10px;
-      padding: 5px 10px;
-    }
-  </style>
+  body {
+    font-family: 'Segoe UI', sans-serif;
+    padding: 20px;
+    background: #1A1F3B;
+    color: #f0f0f0;
+  }
+  /* Container holds left (inventory + hotbar) and right (container grid) */
+  #inventoryContainer {
+    display: flex;
+    gap: 20px;
+  }
+  .left-panel {
+    display: flex;
+    flex-direction: column;
+  }
+  /* Grid styles */
+  .grid.inventory {
+    display: grid;
+    grid-template-columns: repeat(4, 60px);
+    grid-gap: 5px;
+  }
+  .grid.hotbar {
+    display: grid;
+    grid-template-columns: repeat(5, 60px);
+    grid-gap: 5px;
+    margin-top: 10px;
+  }
+  .grid.container {
+    display: grid;
+    grid-template-columns: repeat(3, 60px);
+    grid-gap: 5px;
+  }
+  .slot {
+    width: 60px;
+    height: 60px;
+    border: 1px solid #2E3B55;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #2E3B55;
+    user-select: none;
+    cursor: pointer;
+    position: relative;
+    border-radius: 4px;
+    transition: background 0.3s ease, transform 0.2s ease;
+  }
+  .slot:hover {
+    background: #3B4A6B;
+    transform: translateY(-2px);
+  }
+  /* Floating drag element */
+  #draggingItem {
+    position: absolute;
+    pointer-events: none;
+    background: rgba(60, 60, 80, 0.9);
+    border: 1px solid #555;
+    padding: 5px;
+    border-radius: 3px;
+    font-size: 14px;
+    z-index: 1000;
+    color: #f0f0f0;
+  }
+  button {
+    margin-right: 10px;
+    padding: 5px 10px;
+    background: #2E3B55;
+    border: 1px solid #2E3B55;
+    color: #f0f0f0;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.3s ease, transform 0.2s ease;
+  }
+  button:hover {
+    background: #3B4A6B;
+    transform: translateY(-2px);
+  }
+</style>
+
 </head>
 <body>
   <h2>Inventory System Demo</h2>
