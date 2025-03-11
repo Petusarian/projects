@@ -4,66 +4,71 @@
   <meta charset="UTF-8" />
   <title>Planet Defense Game</title>
   <style>
-    /* Overall container for a 1920x1080 view */
-    #container {
-      position: relative;
-      width: 1920px;
-      height: 1080px;
-      margin: 0 auto;
-      background: #000;
-    }
-    /* Center the game canvas (1080x1080) */
-    #gameCanvas {
-      position: absolute;
-      left: 420px;  /* (1920 - 1080)/2 = 420 */
-      top: 0;
-      width: 1080px;
-      height: 1080px;
-      background: #111;
-      border: 2px solid #fff;
-    }
-    /* Stats panel on the left (vertical list) */
-    #ui {
-      position: absolute;
-      left: 0;
-      top: 0;
-      width: 420px;
-      height: 1080px;
-      background: #222;
-      color: #fff;
-      padding: 20px;
-      box-sizing: border-box;
-      font-size: 18px;
-      overflow-y: auto;
-    }
-    /* Upgrade menu on the right (vertical list) */
-    #upgradeMenu {
-      position: absolute;
-      right: 0;
-      top: 0;
-      width: 420px;
-      height: 1080px;
-      background: rgba(0, 0, 0, 0.85);
-      color: #fff;
-      padding: 20px;
-      box-sizing: border-box;
-      font-size: 18px;
-      display: none;
-      overflow-y: auto;
-    }
-    /* Overlay button (centered over the game canvas if needed) */
-    #overlayButton {
-      position: absolute;
-      left: 50%;
-      top: 20%;
-      transform: translate(-50%, -50%);
-      padding: 20px 30px;
-      font-size: 20px;
-      cursor: pointer;
-      z-index: 20;
-      display: none;
-    }
-  </style>
+  /* Overall container for a 1920x1080 view */
+  #container {
+    position: relative;
+    width: 1920px;
+    height: 1080px;
+    margin: 0 auto;
+    background: #1A1F3B; /* dark blue background */
+  }
+  /* Center the game canvas (1080x1080) */
+  #gameCanvas {
+    position: absolute;
+    left: 420px;  /* (1920 - 1080)/2 = 420 */
+    top: 0;
+    width: 1080px;
+    height: 1080px;
+    background: #111;  /* remains unchanged */
+    border: 2px solid #fff;
+  }
+  /* Stats panel on the left (vertical list) */
+  #ui {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 420px;
+    height: 1080px;
+    background: #2E3B55; /* updated to a dark blue shade */
+    color: #f0f0f0;
+    padding: 20px;
+    box-sizing: border-box;
+    font-size: 18px;
+    overflow-y: auto;
+  }
+  /* Upgrade menu on the right (vertical list) */
+  #upgradeMenu {
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 420px;
+    height: 1080px;
+    background: rgba(26, 31, 59, 0.85); /* dark blue tint */
+    color: #f0f0f0;
+    padding: 20px;
+    box-sizing: border-box;
+    font-size: 18px;
+    display: none;
+    overflow-y: auto;
+  }
+  /* Overlay button (centered over the game canvas if needed) */
+  #overlayButton {
+    position: absolute;
+    left: 50%;
+    top: 20%;
+    transform: translate(-50%, -50%);
+    padding: 20px 30px;
+    font-size: 20px;
+    cursor: pointer;
+    z-index: 20;
+    display: none;
+    background: #2E3B55; /* dark blue button background */
+    border: 2px solid #3B4A6B;
+    color: #f0f0f0;
+    border-radius: 4px;
+  }
+</style>
+
 </head>
 <body>
   <div id="container">
