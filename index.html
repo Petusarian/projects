@@ -4,39 +4,54 @@
   <meta charset="UTF-8">
   <title>My Games</title>
   <style>
+    /* Global styles */
     body {
-      font-family: sans-serif;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       padding: 20px;
-      background: #f0f0f0;
+      margin: 0;
+      background: #1A1F3B;
+      color: #f0f0f0;
     }
     h1 {
       text-align: center;
+      margin-bottom: 20px;
     }
+
     /* Tab navigation styling */
     .tabs {
       display: flex;
       justify-content: center;
       margin-bottom: 10px;
+      border-bottom: 2px solid #2E3B55;
     }
     .tab {
-      padding: 10px 20px;
-      margin: 0 2px;
-      background: #ddd;
-      border: 1px solid #ccc;
+      padding: 12px 24px;
+      margin: 0 5px;
+      background: #2E3B55;
+      border: 1px solid #2E3B55;
+      border-radius: 4px 4px 0 0;
       cursor: pointer;
+      transition: background 0.3s ease, transform 0.2s ease;
+    }
+    .tab:hover {
+      background: #3B4A6B;
+      transform: translateY(-2px);
     }
     .tab.active {
-      background: #fff;
-      border-bottom: 1px solid #fff;
+      background: #1A1F3B;
+      border-bottom: 2px solid #1A1F3B;
     }
+
     /* Content container styling */
     .content {
-      border: 1px solid #ccc;
-      background: #fff;
-      padding: 0;
+      border: 2px solid #2E3B55;
+      background: #1A1F3B;
+      border-radius: 0 4px 4px 4px;
+      overflow: hidden;
     }
     .tab-content {
       display: none;
+      animation: fadeIn 0.5s ease;
     }
     .tab-content.active {
       display: block;
@@ -46,6 +61,14 @@
       height: 1200px;
       border: none;
       display: block;
+      background: #fff;
+      border-radius: 0 0 4px 4px;
+    }
+
+    /* Fade-in animation */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
     }
   </style>
 </head>
@@ -73,14 +96,14 @@
   </div>
   
   <script>
-    // Select tabs and contents
+    // Select tabs and content elements
     const tabs = document.querySelectorAll('.tab');
     const contents = document.querySelectorAll('.tab-content');
     
     // Add click event listeners to each tab
     tabs.forEach(tab => {
       tab.addEventListener('click', () => {
-        // Remove active classes from all tabs and contents
+        // Remove active classes from all tabs and content panels
         tabs.forEach(t => t.classList.remove('active'));
         contents.forEach(c => c.classList.remove('active'));
         
