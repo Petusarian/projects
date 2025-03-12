@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Cosmuncher (Responsive)</title>
+  <style>
+    /* Body & container setup */
+    body {
+      margin: 0;
+      background: #1A1F3B;
+      font-family: 'Segoe UI', sans-serif;
+      color: #fff;
+      overflow: hidden;
+    }
+
+    /* The container is pinned at the top-center, 1280x720, scaled via --scale. */
+    #container {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      width: 1280px;
+      height: 720px;
+      background: #1A1F3B;
+      transform: translateX(-50%) scale(var(--scale, 1));
+      transform-origin: center top;
+    }
+
+    /* Canvas takes up part (or full) of the container. 
+       If you want the sidebar next to it without overlapping,
+       you can reduce the canvas width to (1280 - 320) = 960.
+       Or keep it 1280 wide if you prefer overlapping. */
+    #gameCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 960px; /* For example, 960 so sidebar has 320. */
+      height: 720px;
+      background: #111;
+      border: 2px solid #2E3B55;
+      cursor: none;
+    }
+
+    /* Sidebar pinned on the right side of #container. */
+    #sidebar {
+      position: absolute;
+      top: 0;
+      right: 0;             /* pinned to the right */
+      width: 320px;
+      height: 720px;        /* same height as container */
+      background: #2E3B55;
+      color: #f0f0f0;
+      padding: 15px;
+      box-sizing: border-box;
+      font-size: 18px;
+      overflow-y: auto;
+    }
+
+    /* Button styles */
+    button {
+      padding: 10px 20px;
+      font-size: 20px;
+      cursor: pointer;
+      margin: 10px 0;
+      background: #3B4A6B;
+      border: 2px solid #3B4A6B;
+      color: #f0f0f0;
+      border-radius: 4px;
+      transition: background 0.3s ease, transform 0.2s ease;
+    }
+    button:hover {
+      background: #4A5A7A;
+      transform: translateY(-2px);
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <!-- Canvas Area -->
+    <canvas id="gameCanvas" width="960" height="720"></canvas>
+    <!-- Sidebar for stats and upgrades -->
+    <div id="sidebar">
+      <h2>Cosmuncher</h2>
+      <p><strong>Stardust:</strong> <span id="stardustDisplay">0</span></p>
+      <p><strong>Auto Click Speed:</strong> <span id="clickSpeedDisplay">1</span> click/sec</p>
+      <p><strong>Clicking Strength:</strong> <span id="clickStrengthDisplay">1</span> dmg</p>
+      <div class="upgrade">
+        <p><strong>Upgrade Click Speed</strong></p>
+        <p>Cost: <span id="speedUpgradeCost">10</span> Stardust</p>
+        <button onclick="upgradeClickSpeed()">Upgrade Speed</button>
+      </div>
+      <div class="upgrade">
+        <p><strong>Upgrade Click Strength</strong></p>
+        <p>Cost: <span id="strengthUpgradeCost">10</span> Stardust</p>
+        <button onclick="upgradeClickStrength()">Upgrade Strength</button>
+      </div>
+      <hr>
+      <p style="font-size: 14px;"><em>Auto clicking “hits” stardust particles. Each particle type requires:</em></p>
+      <ul style="text-align: left; margin-left:20px; font-size: 14px;">
+        <li>Common: 4 hits (yields 1 stardust)</li>
+        <li>Rare: 8 hits (yields 2 stardust)</li>
+        <li>Legendary: 12 hits (yields 3 stardust)</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    /****************** Customization Options ******************/
+    const config = {
+      canvasWidth: 960,         // Now 960 if the sidebar is 320, total = 1280
+      canvasHeight: 720,
+      particleCount: 30,
+      particleSpeedFactor: 0.1,
+      customCursorRadius: 30,
+      speedUpgradeMultiplier: 1.2,
+      strengthUpgradeMultiplier: 1.3,
+      initialSpeedUpgradeCost: 10,
+      initialStrengthUpgradeCost: 10,
+      initialClickSpeed: 1,
+      initialClickStrength: 1,
+      starCount: 100,
+      starMinRadius: 0.5,
+      starMaxRadius: 1,
+      starMinAlpha: 0.1,
+      starMaxAlpha: 0.4,
+      starColor: "255,255,255",
+      cometProbability: 0.002,
+      cometMinSpeed: 3,
+      cometMaxSpeed: 5,
+      cometRadius: 2,
+      cometColor: "200,200,200",
+      cometFadeRate: 0.01
+    };
+
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    canvas.width = config.canvasWidth;
+    canvas.height = config.canvasHeight;
+
+    let stardust = 0;
+    let clickSpeed = config.initialClickSpeed;
+    let clickStrength = config.initialClickStrength;
+
+    let speedUpgradeCost = config.initialSpeedUpgradeCost;
+    let strengthUpgradeCost = config.initialStrengthUpgradeCost;
+
+    const stardustDisplay = document.getElementById("stardustDisplay");
+    const clickSpeedDisplay = document.getElementById("clickSpeedDisplay");
+    const clickStrengthDisplay = document.getElementById("clickStrengthDisplay");
+    const speedUpgradeCostDisplay = document.getElementById("speedUpgradeCost");
+    const strengthUpgradeCostDisplay = document.getElementById("strengthUpgradeCost");
+
+    let mouseX = config.canvasWidth / 2, mouseY = config.canvasHeight / 2;
+    let cursorPulse = 1; // pulsation
+    let shake = { x: 0, y: 0 };
+
+    /****************** Mouse & Scale Fix ******************/
+    canvas.addEventListener("mousemove", function(e) {
+      const rect = canvas.getBoundingClientRect();
+      // If container is being scaled, rect.width != config.canvasWidth, etc.
+      // We can correct it by factoring the ratio:
+      const scaleX = config.canvasWidth / rect.width;
+      const scaleY = config.canvasHeight / rect.height;
+      mouseX = (e.clientX - rect.left) * scaleX;
+      mouseY = (e.clientY - rect.top) * scaleY;
+    });
+
+    /****************** Dynamic Scaling ******************/
+    function updateScale() {
+      const scale = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
+      document.documentElement.style.setProperty('--scale', scale);
+    }
+    window.addEventListener('resize', updateScale);
+    updateScale();
+
+    /****************** Background Stars & Comets ******************/
+    let stars = [];
+    let comets = [];
+
+    function initStars() {
+      for (let i = 0; i < config.starCount; i++) {
+        stars.push({
+          x: Math.random() * config.canvasWidth,
+          y: Math.random() * config.canvasHeight,
+          radius: Math.random() * (config.starMaxRadius - config.starMinRadius) + config.starMinRadius,
+          alpha: Math.random() * (config.starMaxAlpha - config.starMinAlpha) + config.starMinAlpha
+        });
+      }
+    }
+    function drawStars() {
+      for (let star of stars) {
+        ctx.beginPath();
+        ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${config.starColor}, ${star.alpha})`;
+        ctx.fill();
+      }
+    }
+    function spawnComet() {
+      comets.push({
+        x: Math.random() * config.canvasWidth,
+        y: -20,
+        vx: config.cometMinSpeed + Math.random() * (config.cometMaxSpeed - config.cometMinSpeed),
+        vy: config.cometMinSpeed + Math.random() * (config.cometMaxSpeed - config.cometMinSpeed),
+        alpha: 1
+      });
+    }
+    function updateAndDrawComets() {
+      for (let i = comets.length - 1; i >= 0; i--) {
+        let comet = comets[i];
+        comet.x += comet.vx;
+        comet.y += comet.vy;
+        comet.alpha -= config.cometFadeRate;
+        if (comet.alpha <= 0 ||
+            comet.x > config.canvasWidth ||
+            comet.y > config.canvasHeight) {
+          comets.splice(i, 1);
+        } else {
+          ctx.beginPath();
+          ctx.arc(comet.x, comet.y, config.cometRadius, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(${config.cometColor}, ${comet.alpha})`;
+          ctx.fill();
+        }
+      }
+      if (Math.random() < config.cometProbability) {
+        spawnComet();
+      }
+    }
+
+    /****************** Stardust Particles ******************/
+    function Particle(x, y, vx, vy, type) {
+      this.x = x;
+      this.y = y;
+      this.vx = vx;
+      this.vy = vy;
+      this.type = type;
+      if (type === 1) {
+        this.maxHP = 4;
+        this.yield = 1;
+        this.radius = 8 + Math.random() * 4;
+      } else if (type === 2) {
+        this.maxHP = 8;
+        this.yield = 2;
+        this.radius = 12 + Math.random() * 4;
+      } else {
+        this.maxHP = 12;
+        this.yield = 3;
+        this.radius = 16 + Math.random() * 4;
+      }
+      this.hp = this.maxHP;
+      this.pulse = 1;
+    }
+
+    let particles = [];
+    function spawnParticle() {
+      let x, y, vx, vy;
+      const speedFactor = config.particleSpeedFactor;
+      let type;
+      const rand = Math.random();
+      if (rand < 0.7) type = 1;
+      else if (rand < 0.9) type = 2;
+      else type = 3;
+
+      const edge = Math.floor(Math.random() * 4);
+      if (edge === 0) { // left
+        x = 0;
+        y = Math.random() * config.canvasHeight;
+        vx = (1 + Math.random() * 2) * speedFactor;
+        vy = ((Math.random() - 0.5) * 2) * speedFactor;
+      } else if (edge === 1) { // right
+        x = config.canvasWidth;
+        y = Math.random() * config.canvasHeight;
+        vx = - (1 + Math.random() * 2) * speedFactor;
+        vy = ((Math.random() - 0.5) * 2) * speedFactor;
+      } else if (edge === 2) { // top
+        x = Math.random() * config.canvasWidth;
+        y = 0;
+        vx = ((Math.random() - 0.5) * 2) * speedFactor;
+        vy = (1 + Math.random() * 2) * speedFactor;
+      } else { // bottom
+        x = Math.random() * config.canvasWidth;
+        y = config.canvasHeight;
+        vx = ((Math.random() - 0.5) * 2) * speedFactor;
+        vy = - (1 + Math.random() * 2) * speedFactor;
+      }
+      particles.push(new Particle(x, y, vx, vy, type));
+    }
+
+    function initParticles() {
+      for (let i = 0; i < config.particleCount; i++) {
+        spawnParticle();
+      }
+    }
+
+    function updateParticles() {
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        if (p.x < -p.radius) p.x = config.canvasWidth + p.radius;
+        if (p.x > config.canvasWidth + p.radius) p.x = -p.radius;
+        if (p.y < -p.radius) p.y = config.canvasHeight + p.radius;
+        if (p.y > config.canvasHeight + p.radius) p.y = -p.radius;
+        if (p.pulse > 1) {
+          p.pulse -= 0.02;
+          if (p.pulse < 1) p.pulse = 1;
+        }
+      }
+    }
+
+    function drawParticles() {
+      for (let p of particles) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius * p.pulse, 0, Math.PI * 2);
+        if (p.type === 1) {
+          ctx.strokeStyle = "rgba(220,220,180,0.8)";
+          ctx.fillStyle = "rgba(220,220,180,0.8)";
+        } else if (p.type === 2) {
+          ctx.strokeStyle = "rgba(180,220,220,0.8)";
+          ctx.fillStyle = "rgba(180,220,220,0.8)";
+        } else {
+          ctx.strokeStyle = "rgba(220,180,220,0.8)";
+          ctx.fillStyle = "rgba(220,180,220,0.8)";
+        }
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // interior
+        let innerRadius = (p.radius * (p.hp / p.maxHP)) * p.pulse;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, innerRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // reset shadow
+        ctx.shadowBlur = 0;
+      }
+    }
+
+    /****************** Automated Clicking ******************/
+    function autoClick() {
+      cursorPulse = 1.5; 
+      const threshold = config.customCursorRadius + 20;
+      let hitAny = false;
+      for (let p of particles) {
+        const dx = p.x - mouseX;
+        const dy = p.y - mouseY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < threshold) {
+          p.hp -= clickStrength;
+          p.pulse = 1.5;
+          hitAny = true;
+          if (p.hp <= 0) {
+            stardust += p.yield;
+            const index = particles.indexOf(p);
+            if (index > -1) {
+              particles.splice(index, 1);
+              spawnParticle();
+            }
+          }
+        }
+      }
+      if (hitAny) {
+        shake.x = (Math.random() - 0.5) * 10;
+        shake.y = (Math.random() - 0.5) * 10;
+      }
+      updateSidebar();
+      setTimeout(autoClick, 1000 / clickSpeed);
+    }
+
+    /****************** Upgrades ******************/
+    function upgradeClickSpeed() {
+      if (stardust >= speedUpgradeCost) {
+        stardust -= speedUpgradeCost;
+        clickSpeed *= config.speedUpgradeMultiplier;
+        speedUpgradeCost += 10;
+        updateSidebar();
+      } else {
+        alert("Not enough stardust for speed upgrade!");
+      }
+    }
+    function upgradeClickStrength() {
+      if (stardust >= strengthUpgradeCost) {
+        stardust -= strengthUpgradeCost;
+        clickStrength *= config.strengthUpgradeMultiplier;
+        strengthUpgradeCost += 10;
+        updateSidebar();
+      } else {
+        alert("Not enough stardust for strength upgrade!");
+      }
+    }
+
+    /****************** Sidebar Update ******************/
+    function updateSidebar() {
+      stardustDisplay.innerText = Math.floor(stardust);
+      clickSpeedDisplay.innerText = clickSpeed.toFixed(2);
+      clickStrengthDisplay.innerText = clickStrength.toFixed(2);
+      speedUpgradeCostDisplay.innerText = speedUpgradeCost;
+      strengthUpgradeCostDisplay.innerText = strengthUpgradeCost;
+    }
+
+    /****************** Screen Shake ******************/
+    function updateShake() {
+      shake.x *= 0.9;
+      shake.y *= 0.9;
+    }
+
+    /****************** Main Loop ******************/
+    function gameLoop() {
+      ctx.save();
+      ctx.translate(shake.x, shake.y);
+      ctx.clearRect(-shake.x, -shake.y, config.canvasWidth, config.canvasHeight);
+
+      drawStars();
+      updateAndDrawComets();
+
+      updateParticles();
+      drawParticles();
+      updateShake();
+
+      if (cursorPulse > 1) {
+        cursorPulse -= 0.02;
+        if (cursorPulse < 1) cursorPulse = 1;
+      }
+
+      // Draw the custom cursor
+      let radius = config.customCursorRadius * cursorPulse;
+      ctx.beginPath();
+      ctx.arc(mouseX, mouseY, radius, 0, Math.PI * 2);
+      ctx.strokeStyle = "#ffdd00";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(mouseX, mouseY, 5, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffdd00";
+      ctx.fill();
+
+      ctx.restore();
+      requestAnimationFrame(gameLoop);
+    }
+
+    initStars();
+    initParticles();
+    updateSidebar();
+    gameLoop();
+    autoClick();
+  </script>
+</body>
+</html>
