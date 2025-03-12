@@ -176,14 +176,13 @@
     const beginButton = document.getElementById('beginGame');
 
     // Game area dimensions
-    const gameWidth = game.clientWidth;
-    const gameHeight = game.clientHeight;
-    // Define three lanes (vertical center positions)
-    const lanes = [
-      gameHeight / 6,      // Top lane
-      gameHeight / 2,      // Middle lane
-      gameHeight * 5 / 6   // Bottom lane
-    ];
+    let gameWidth = game.clientWidth;
+	let gameHeight = game.clientHeight;
+	let lanes = [
+	  gameHeight / 6,
+	  gameHeight / 2,
+	  gameHeight * 5 / 6
+	];
 
     // Global game state
     let money = 0;
@@ -467,22 +466,30 @@
 
     // Reset game state and start the game loop
     function resetGame() {
-      // Remove all existing unit elements
-      playerUnits.forEach(unit => { if(unit.element.parentNode === game) game.removeChild(unit.element); });
-      enemyUnits.forEach(unit => { if(unit.element.parentNode === game) game.removeChild(unit.element); });
-      playerUnits = [];
-      enemyUnits = [];
-      money = 0;
-      playerBaseHealth = 100;
-      enemyBaseHealth = 100;
-      gameOver = false;
-      updateMoneyDisplay();
-      updateBaseDisplays();
-      // Clear any previous enemy spawn interval
-      if (enemySpawnInterval) clearInterval(enemySpawnInterval);
-      enemySpawnInterval = setInterval(() => { if (!gameOver) spawnEnemyUnit(); }, 1000);
-      requestAnimationFrame(gameLoop);
-    }
+  // Update game dimensions in case they have changed
+  gameWidth = game.clientWidth;
+  gameHeight = game.clientHeight;
+  lanes = [
+    gameHeight / 6,
+    gameHeight / 2,
+    gameHeight * 5 / 6
+  ];
+  
+  // Remove all existing unit elements, reset game state, etc.
+  playerUnits.forEach(unit => { if(unit.element.parentNode === game) game.removeChild(unit.element); });
+  enemyUnits.forEach(unit => { if(unit.element.parentNode === game) game.removeChild(unit.element); });
+  playerUnits = [];
+  enemyUnits = [];
+  money = 0;
+  playerBaseHealth = 100;
+  enemyBaseHealth = 100;
+  gameOver = false;
+  updateMoneyDisplay();
+  updateBaseDisplays();
+  if (enemySpawnInterval) clearInterval(enemySpawnInterval);
+  enemySpawnInterval = setInterval(() => { if (!gameOver) spawnEnemyUnit(); }, 1000);
+  requestAnimationFrame(gameLoop);
+}
 
     // Begin/Restart game when the button is clicked
     beginButton.addEventListener('click', resetGame);
