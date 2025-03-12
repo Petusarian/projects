@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Advanced Tactical Grid Strategy Game v5</title>
+  <style>
+    /* Global Styles & Dark Blue Theme */
+    body {
+      margin: 0;
+      background: #1A1F3B;
+      color: #f0f0f0;
+      font-family: 'Segoe UI', sans-serif;
+      overflow: hidden;
+    }
+    /* Container centered at top with responsive scaling */
+    #gameContainer {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      width: 800px;
+      height: 900px;
+      transform: translateX(-50%) scale(var(--scale, 1));
+      transform-origin: center top;
+    }
+    /* Grid Board */
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      grid-template-rows: repeat(8, 1fr);
+      gap: 2px;
+      width: 100%;
+      height: 800px;
+      background: #2E3B55;
+      border: 4px solid #2E3B55;
+      box-sizing: border-box;
+      position: relative;
+    }
+    /* Each cell */
+    .cell {
+      background: #1A1F3B;
+      border: 1px solid #2E3B55;
+      position: relative;
+      cursor: pointer;
+      transition: background 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1;
+    }
+    .cell:hover {
+      background: #27305A;
+    }
+    /* Available cells with subtle circular gradients */
+    .available-move {
+      background: radial-gradient(circle, rgba(74,144,226,0.5) 0%, rgba(74,144,226,0.2) 70%) !important;
+    }
+    .available-attack {
+      background: radial-gradient(circle, rgba(255,65,54,0.5) 0%, rgba(255,65,54,0.2) 70%) !important;
+    }
+    .available-heal {
+      background: radial-gradient(circle, rgba(46,204,64,0.5) 0%, rgba(46,204,64,0.2) 70%) !important;
+    }
+    .available-defend {
+      background: radial-gradient(circle, rgba(255,220,0,0.5) 0%, rgba(255,220,0,0.2) 70%) !important;
+    }
+    /* Obstacle style */
+    .obstacle {
+      background: #3B4A6B;
+    }
+    /* Unit Styles */
+    .unit {
+      width: 70%;
+      height: 70%;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      user-select: none;
+      position: relative;
+      pointer-events: none; /* clicks pass to the cell */
+      transition: transform 0.2s ease;
+    }
+    /* Highlight the selected unit */
+    .selectedUnit {
+      box-shadow: 0 0 10px #f39c12;
+      transform: scale(1.05);
+    }
+    /* Dim units that have used their action */
+    .used {
+      opacity: 0.5;
+    }
+    .player {
+      background: #3B82F6;
+    }
+    .enemy {
+      background: #EF4444;
+    }
+    /* Health Badge */
+    .healthBadge {
+      position: absolute;
+      bottom: -5px;
+      right: -5px;
+      background: #fff;
+      color: #1A1F3B;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: bold;
+    }
+    /* Selected Cell styling: gold outline, pulse, and above other cells */
+    .selected {
+      border: 2px solid #f39c12;
+      animation: pulse 1s infinite;
+      z-index: 10;
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+      100% { transform: scale(1); }
+    }
+    /* Shake Animation for cell impact */
+    @keyframes shake {
+      0% { transform: translate(0, 0); }
+      25% { transform: translate(-5px, 0); }
+      50% { transform: translate(5px, 0); }
+      75% { transform: translate(-5px, 0); }
+      100% { transform: translate(0, 0); }
+    }
+    .shake {
+      animation: shake 0.3s;
+    }
+    /* Screen Shake for grid container */
+    @keyframes screenShake {
+      0% { transform: translate(0, 0); }
+      25% { transform: translate(-5px, 5px); }
+      50% { transform: translate(5px, -5px); }
+      75% { transform: translate(-5px, -5px); }
+      100% { transform: translate(0, 0); }
+    }
+    .shake-screen {
+      animation: screenShake 0.5s;
+    }
+    /* Hop animation for moving */
+    @keyframes hop {
+      0% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+      100% { transform: translateY(0); }
+    }
+    .hop {
+      animation: hop 0.3s;
+    }
+    /* Info Panel */
+    #infoPanel {
+      margin-top: 5px;
+      text-align: center;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <div id="grid"></div>
+    <div id="infoPanel">Player Phase - Select a friendly unit</div>
+  </div>
+
+  <script>
+    /************* Responsive Scaling *************/
+    function updateScale() {
+      const containerWidth = 800, containerHeight = 900;
+      const scale = Math.min(window.innerWidth / containerWidth, window.innerHeight / containerHeight);
+      document.documentElement.style.setProperty('--scale', scale);
+    }
+    window.addEventListener('resize', updateScale);
+    updateScale();
+
+    /************* Game Data Structures *************/
+    const numRows = 8, numCols = 8;
+    let gridCells = []; // 2D array of cells
+
+    // Define obstacles (randomly place 4 obstacles, avoiding top and bottom rows)
+    let obstacles = [];
+    while(obstacles.length < 4) {
+      let r = Math.floor(Math.random() * numRows);
+      let c = Math.floor(Math.random() * numCols);
+      if (r === numRows - 1 || r === 0) continue;
+      if (!obstacles.some(o => o.row === r && o.col === c)) {
+        obstacles.push({ row: r, col: c });
+      }
+    }
+
+    // Units: each has id, type ("player" or "enemy"), row, col, health, maxHealth, actionUsed, defending
+    let playerUnits = [
+      { id: "p1", type: "player", row: 7, col: 0, health: 3, maxHealth: 3, actionUsed: false, defending: false },
+      { id: "p2", type: "player", row: 7, col: 2, health: 3, maxHealth: 3, actionUsed: false, defending: false }
+    ];
+    let enemyUnits = [
+      { id: "e1", type: "enemy", row: 0, col: 7, health: 2, maxHealth: 2, actionUsed: false },
+      { id: "e2", type: "enemy", row: 0, col: 5, health: 2, maxHealth: 2, actionUsed: false }
+    ];
+
+    let phase = "player"; // "player", "enemy", "gameover"
+    let selectedUnit = null; // currently selected friendly unit
+
+    /************* DOM Elements *************/
+    const gridEl = document.getElementById('grid');
+    const infoPanel = document.getElementById('infoPanel');
+
+    /************* Initialize Grid *************/
+    function createGrid() {
+      gridEl.innerHTML = "";
+      gridCells = [];
+      for (let r = 0; r < numRows; r++) {
+        let rowArr = [];
+        for (let c = 0; c < numCols; c++) {
+          const cell = document.createElement('div');
+          cell.classList.add('cell');
+          cell.dataset.row = r;
+          cell.dataset.col = c;
+          cell.addEventListener('click', handleCellClick);
+          if (obstacles.some(o => o.row === r && o.col === c)) {
+            cell.classList.add('obstacle');
+          }
+          gridEl.appendChild(cell);
+          rowArr.push(cell);
+        }
+        gridCells.push(rowArr);
+      }
+      drawUnits();
+    }
+
+    /************* Draw Units & Obstacles *************/
+    function drawUnits() {
+      // Clear cells but preserve available highlights
+      gridCells.forEach(row => row.forEach(cell => {
+        // Clear innerHTML and temporary classes (except available classes)
+        let avail = cell.classList.contains('available-move') || cell.classList.contains('available-attack') ||
+                    cell.classList.contains('available-heal') || cell.classList.contains('available-defend');
+        cell.innerHTML = "";
+        if (!avail) cell.classList.remove('selected','shake');
+      }));
+      // Draw player units
+      playerUnits.forEach(unit => {
+        const cell = gridCells[unit.row][unit.col];
+        const unitDiv = document.createElement('div');
+        unitDiv.classList.add('unit', 'player');
+        if(unit.actionUsed) unitDiv.classList.add('used');
+        if (selectedUnit && unit.id === selectedUnit.id) {
+          unitDiv.classList.add('selectedUnit');
+          cell.classList.add('selected');
+        }
+        unitDiv.textContent = "P";
+        const badge = document.createElement('div');
+        badge.classList.add('healthBadge');
+        badge.textContent = unit.health;
+        unitDiv.appendChild(badge);
+        cell.appendChild(unitDiv);
+      });
+      // Draw enemy units
+      enemyUnits.forEach(unit => {
+        const cell = gridCells[unit.row][unit.col];
+        const unitDiv = document.createElement('div');
+        unitDiv.classList.add('unit', 'enemy');
+        unitDiv.textContent = "E";
+        const badge = document.createElement('div');
+        badge.classList.add('healthBadge');
+        badge.textContent = unit.health;
+        unitDiv.appendChild(badge);
+        cell.appendChild(unitDiv);
+      });
+      updateInfo();
+      // Reapply available highlights if a unit is selected
+      if (selectedUnit) highlightAvailableCells();
+    }
+
+    /************* Update Info Panel *************/
+    function updateInfo() {
+      infoPanel.textContent = phase === "player" ? "Player Phase - Select a friendly unit" : "Enemy Phase";
+    }
+
+    /************* Get Occupant in a Cell *************/
+    function getOccupant(r, c) {
+      const p = playerUnits.find(u => u.row === r && u.col === c);
+      if (p) return { type: 'player', unit: p };
+      const e = enemyUnits.find(u => u.row === r && u.col === c);
+      if (e) return { type: 'enemy', unit: e };
+      return null;
+    }
+
+    /************* Highlight Available Cells *************/
+    // Color codes:
+    // - Selected unit's own cell: Yellow (defend)
+    // - Empty cell: Blue (move)
+    // - Enemy cell: Red (attack)
+    // - Friendly (other) unit cell: Green (heal)
+    function highlightAvailableCells() {
+      clearAvailableHighlights();
+      if (!selectedUnit) return;
+      const r = selectedUnit.row, c = selectedUnit.col;
+      const positions = [
+        { r: r, c: c }, // own cell: defend
+        { r: r - 1, c: c },
+        { r: r + 1, c: c },
+        { r: r, c: c - 1 },
+        { r: r, c: c + 1 }
+      ];
+      positions.forEach(pos => {
+        if (pos.r < 0 || pos.r >= numRows || pos.c < 0 || pos.c >= numCols) return;
+        const cell = gridCells[pos.r][pos.c];
+        if (pos.r === r && pos.c === c) {
+          cell.classList.add('available-defend');
+          cell.dataset.action = "defend";
+        } else {
+          const occ = getOccupant(pos.r, pos.c);
+          if (!occ) {
+            cell.classList.add('available-move');
+            cell.dataset.action = "move";
+          } else if (occ.type === "enemy") {
+            cell.classList.add('available-attack');
+            cell.dataset.action = "attack";
+          } else if (occ.type === "player" && occ.unit.id !== selectedUnit.id) {
+            cell.classList.add('available-heal');
+            cell.dataset.action = "heal";
+          }
+        }
+      });
+    }
+
+    function clearAvailableHighlights() {
+      gridCells.forEach(row => row.forEach(cell => {
+        cell.classList.remove('available-move','available-attack','available-heal','available-defend');
+        delete cell.dataset.action;
+      }));
+    }
+
+    /************* Unit Selection *************/
+    function selectUnit(unit, cellEl) {
+      if (selectedUnit) {
+        const prevCell = gridCells[selectedUnit.row][selectedUnit.col];
+        prevCell.classList.remove('selected');
+      }
+      selectedUnit = unit;
+      cellEl.classList.add('selected');
+      highlightAvailableCells();
+    }
+
+    /************* Execute Action Based on Clicked Cell *************/
+    function executeAction(cell) {
+      const action = cell.dataset.action;
+      const r = parseInt(cell.dataset.row);
+      const c = parseInt(cell.dataset.col);
+      if (!selectedUnit) return;
+      if (action === "defend") {
+        // Defend: mark selected unit as defending.
+        selectedUnit.defending = true;
+      } else if (action === "move") {
+        // Move: animate hop from current cell to target cell.
+        const currentCell = gridCells[selectedUnit.row][selectedUnit.col];
+        currentCell.classList.add('hop');
+        selectedUnit.row = r;
+        selectedUnit.col = c;
+      } else if (action === "attack") {
+        // Attack: reduce enemy health.
+        const target = enemyUnits.find(u => u.row === r && u.col === c);
+        if (target) {
+          target.health -= selectedUnit.defending ? 1 : 2;
+          // Impact animation: shake the cell and screen.
+          cell.classList.add('shake');
+          setTimeout(() => cell.classList.remove('shake'), 300);
+          gridEl.classList.add('shake-screen');
+          setTimeout(() => gridEl.classList.remove('shake-screen'), 500);
+          // If enemy is killed, move into its cell.
+          if (target.health <= 0) {
+            enemyUnits = enemyUnits.filter(u => u.id !== target.id);
+            selectedUnit.row = r;
+            selectedUnit.col = c;
+            if (enemyUnits.length === 0) {
+              alert("All enemy units defeated! You win!");
+              phase = "gameover";
+            }
+          }
+        }
+      } else if (action === "heal") {
+        // Heal: heal the friendly unit that is not the selected one.
+        const target = playerUnits.find(u => u.row === r && u.col === c && u.id !== selectedUnit.id);
+        if (target && target.health < target.maxHealth) {
+          target.health += 1;
+        }
+      }
+      // Mark selected unit as acted.
+      selectedUnit.actionUsed = true;
+      clearAvailableHighlights();
+      const selCell = gridCells[selectedUnit.row][selectedUnit.col];
+      selCell.classList.remove('selected');
+      selectedUnit = null;
+      drawUnits();
+      // If all player units acted, trigger enemy phase.
+      if (playerUnits.every(u => u.actionUsed)) {
+        setTimeout(enemyPhase, 500);
+      }
+    }
+
+    /************* Cell Click Handler *************/
+    function handleCellClick(e) {
+      const r = parseInt(this.dataset.row);
+      const c = parseInt(this.dataset.col);
+      if (phase === "player" && !selectedUnit) {
+        // Select a friendly unit if available.
+        const unit = playerUnits.find(u => u.row === r && u.col === c && !u.actionUsed);
+        if (unit) {
+          selectUnit(unit, this);
+        }
+        return;
+      }
+      // If a unit is selected and the cell is available for an action.
+      if (phase === "player" && selectedUnit && (this.classList.contains('available-move') ||
+          this.classList.contains('available-attack') || 
+          this.classList.contains('available-heal') ||
+          this.classList.contains('available-defend'))) {
+        executeAction(this);
+      }
+    }
+
+    /************* Enemy Phase Logic *************/
+    function enemyPhase() {
+      phase = "enemy";
+      infoPanel.textContent = "Enemy Phase";
+      // Reset defending status for next round.
+      playerUnits.forEach(u => u.defending = false);
+      enemyUnits.forEach(enemy => {
+        let target = getNearestPlayer(enemy);
+        if (target) {
+          if (!isAdjacent(enemy.row, enemy.col, target.row, target.col)) {
+            if (enemy.row < target.row && isCellFree(enemy.row + 1, enemy.col)) enemy.row++;
+            else if (enemy.row > target.row && isCellFree(enemy.row - 1, enemy.col)) enemy.row--;
+            else if (enemy.col < target.col && isCellFree(enemy.row, enemy.col + 1)) enemy.col++;
+            else if (enemy.col > target.col && isCellFree(enemy.row, enemy.col - 1)) enemy.col--;
+          } else {
+            target.health -= target.defending ? 1 : 2;
+            const targetCell = gridCells[target.row][target.col];
+            targetCell.classList.add('shake');
+            setTimeout(() => targetCell.classList.remove('shake'), 300);
+            if (target.health <= 0) {
+              playerUnits = playerUnits.filter(u => u.id !== target.id);
+              if (playerUnits.length === 0) {
+                alert("All your units have been defeated. You lose.");
+                phase = "gameover";
+              }
+            }
+          }
+        }
+      });
+      playerUnits.forEach(u => u.actionUsed = false);
+      phase = "player";
+      infoPanel.textContent = "Player Phase - Select a friendly unit";
+      drawUnits();
+    }
+    // Helper: Check if cell (r,c) is free (no obstacle, no unit)
+    function isCellFree(r, c) {
+      if (obstacles.some(o => o.row === r && o.col === c)) return false;
+      if (playerUnits.some(u => u.row === r && u.col === c)) return false;
+      if (enemyUnits.some(u => u.row === r && u.col === c)) return false;
+      return true;
+    }
+    // Helper: Check if two cells are adjacent (Manhattan distance 1)
+    function isAdjacent(r1, c1, r2, c2) {
+      const dr = Math.abs(r1 - r2);
+      const dc = Math.abs(c1 - c2);
+      return (dr + dc === 1);
+    }
+    // Helper: Find nearest player unit for an enemy.
+    function getNearestPlayer(enemy) {
+      let minDist = Infinity, nearest = null;
+      playerUnits.forEach(u => {
+        const dist = Math.abs(u.row - enemy.row) + Math.abs(u.col - enemy.col);
+        if (dist < minDist) {
+          minDist = dist;
+          nearest = u;
+        }
+      });
+      return nearest;
+    }
+
+    /************* Start Game *************/
+    createGrid();
+
+    /************* Periodic Redraw *************/
+    setInterval(drawUnits, 100);
+  </script>
+</body>
+</html>
