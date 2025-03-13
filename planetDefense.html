@@ -335,11 +335,19 @@
 
     // Shatter asteroid.
     function shatterAsteroid(asteroid) {
-  shakeIntensity += config.shake.asteroidHit;
-  score += 10;
-  shards += 10;
-  // Spawn one explosion effect at the asteroid's center.
-  createExplosion(asteroid.x, asteroid.y, 1);
+  // Only trigger if not already exploding
+  if (!asteroid.exploding) {
+    shakeIntensity += config.shake.asteroidHit;
+    score += 10;
+    shards += 10;
+    // Slow down the asteroid (adjust the factor as needed)
+    asteroid.vx *= 0.7;
+    asteroid.vy *= 0.7;
+    // Mark the asteroid as exploding and start the explosion timer
+    asteroid.exploding = true;
+    asteroid.explosionLife = 1000; // explosion duration in ms
+    asteroid.explosionElapsed = 0;
+  }
 }
 
 
@@ -642,36 +650,73 @@
 
     // Draw asteroids.
     function drawAsteroids() {
-  const scaleFactor = 3; // Adjust this multiplier as needed.
+  const scaleFactor = 3; // Adjust to get the desired size for the asteroid image.
   asteroids.forEach(asteroid => {
     ctx.save();
     ctx.translate(asteroid.x, asteroid.y);
     ctx.rotate(asteroid.angle);
-    // Multiply the asteroid radius by scaleFactor for a larger image.
-    ctx.drawImage(
-      asteroidImg,
-      -asteroid.radius * scaleFactor, 
-      -asteroid.radius * scaleFactor, 
-      asteroid.radius * 2 * scaleFactor, 
-      asteroid.radius * 2 * scaleFactor
-    );
+    
+    if (asteroid.exploding) {
+      // Draw the explosion animation using your sprite sheet.
+      const frameCount = 8;
+      // Make sure the explosion image is loaded.
+      if (!explosionImg.complete) return;
+      const frameWidth = explosionImg.width / frameCount;
+      // Calculate the frame index based on the explosion's elapsed time.
+      let frame = Math.floor((asteroid.explosionElapsed / asteroid.explosionLife) * frameCount);
+      if (frame >= frameCount) frame = frameCount - 1;
+      const alpha = 1 - (asteroid.explosionElapsed / asteroid.explosionLife);
+      ctx.globalAlpha = alpha;
+      // Draw the selected frame centered on the asteroid.
+      ctx.drawImage(
+        explosionImg,
+        frame * frameWidth, 0, 
+        frameWidth, explosionImg.height,
+        -frameWidth / 2, -explosionImg.height / 2,
+        frameWidth, explosionImg.height
+      );
+    } else {
+      // Draw the asteroid image larger.
+      ctx.drawImage(
+        asteroidImg,
+        -asteroid.radius * scaleFactor,
+        -asteroid.radius * scaleFactor,
+        asteroid.radius * 2 * scaleFactor,
+        asteroid.radius * 2 * scaleFactor
+      );
+    }
     ctx.restore();
   });
 }
 
 
+
     // Update asteroids.
     function updateAsteroids(deltaTime) {
-      for (let i = asteroids.length - 1; i >= 0; i--) {
-        const a = asteroids[i];
-        a.x += a.vx;
-        a.y += a.vy;
-        a.angle += a.angularVelocity;
-        if (a.x < -100 || a.x > WIDTH + 100 || a.y < -100 || a.y > HEIGHT + 100) {
-          asteroids.splice(i, 1);
-        }
+  for (let i = asteroids.length - 1; i >= 0; i--) {
+    const a = asteroids[i];
+    // Update position and rotation regardless
+    a.x += a.vx;
+    a.y += a.vy;
+    a.angle += a.angularVelocity;
+    
+    if (a.exploding) {
+      a.explosionElapsed += deltaTime;
+      // Remove asteroid after explosion animation completes
+      if (a.explosionElapsed >= a.explosionLife) {
+        asteroids.splice(i, 1);
+        continue;
+      }
+    } else {
+      // Remove asteroids that go off-screen as before.
+      if (a.x < -100 || a.x > WIDTH + 100 || a.y < -100 || a.y > HEIGHT + 100) {
+        asteroids.splice(i, 1);
+        continue;
       }
     }
+  }
+}
+
 
     // Update debris.
     function updateDebris(deltaTime) {
