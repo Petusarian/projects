@@ -185,6 +185,22 @@
         targetingDelay: 400    // ms delay before firing after acquiring target.
       }
     };
+
+
+	  // Preload custom asset images.
+	const planetImg = new Image();
+	planetImg.src = "assets/Terran.png";
+	
+	const moonImg = new Image();
+	moonImg.src = "assets/Baren.png";
+	
+	const asteroidImg = new Image();
+	asteroidImg.src = "assets/Asteroid 01 - Base.png";
+	
+	const explosionImg = new Image();
+	explosionImg.src = "assets/Asteroid 01 - Explode.png";
+
+	  
     /**************************************************************/
 
     // Canvas and UI setup.
@@ -419,17 +435,23 @@
     }
     // Draw explosion particles.
     function drawExplosions() {
-      explosions.forEach(p => {
-        const alpha = 1 - (p.elapsed / p.life);
-        ctx.save();
-        ctx.globalAlpha = alpha;
-        ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      });
-    }
+  explosions.forEach(p => {
+    const alpha = 1 - (p.elapsed / p.life);
+    const frameCount = 8;
+    // Make sure the explosion image has loaded before using its dimensions.
+    if (!explosionImg.complete) return;
+    const frameWidth = explosionImg.width / frameCount;
+    // Calculate which frame to show based on elapsed time.
+    let frame = Math.floor((p.elapsed / p.life) * frameCount);
+    if (frame >= frameCount) frame = frameCount - 1;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    // Draw the selected frame; center the explosion at (p.x, p.y)
+    ctx.drawImage(explosionImg, frame * frameWidth, 0, frameWidth, explosionImg.height,
+                  p.x - frameWidth / 2, p.y - explosionImg.height / 2, frameWidth, explosionImg.height);
+    ctx.restore();
+  });
+}
 
     // Update stars.
     function updateStars(deltaTime) {
@@ -588,17 +610,16 @@
     // Draw planet.
     function drawPlanet() {
       if (gameState !== "exploding" && gameState !== "gameover") {
-        ctx.beginPath();
-        ctx.arc(planet.x, planet.y, planet.radius, 0, Math.PI * 2);
-        ctx.fillStyle = "#3498db";
-        ctx.fill();
-      }
-      const barWidth = 80, barHeight = 10;
-      const healthPercent = planetHealth / planetMaxHealth;
-      ctx.fillStyle = "#e74c3c";
-      ctx.fillRect(planet.x - barWidth/2, planet.y - planet.radius - 20, barWidth * healthPercent, barHeight);
-      ctx.strokeStyle = "#fff";
-      ctx.strokeRect(planet.x - barWidth/2, planet.y - planet.radius - 20, barWidth, barHeight);
+    // Draw the planet image centered at planet.x, planet.y.
+    ctx.drawImage(planetImg, planet.x - planet.radius, planet.y - planet.radius, planet.radius * 2, planet.radius * 2);
+  }
+  // (Keep the health bar drawing code unchanged below.)
+  const barWidth = 80, barHeight = 10;
+  const healthPercent = planetHealth / planetMaxHealth;
+  ctx.fillStyle = "#e74c3c";
+  ctx.fillRect(planet.x - barWidth/2, planet.y - planet.radius - 20, barWidth * healthPercent, barHeight);
+  ctx.strokeStyle = "#fff";
+  ctx.strokeRect(planet.x - barWidth/2, planet.y - planet.radius - 20, barWidth, barHeight);
       if (gameState === "moonRebuild") {
         const rebuildBarWidth = 80, rebuildBarHeight = 10;
         const progress = moonRebuildProgress / config.rebuild.requiredClicks;
@@ -618,33 +639,27 @@
 
     // Draw moon.
     function drawMoon() {
-      if (gameState !== "moonRebuild" && gameState !== "exploding" && gameState !== "gameover") {
-        const moonX = planet.x + moon.orbitRadius * Math.cos(moon.angle);
-        const moonY = planet.y + moon.orbitRadius * Math.sin(moon.angle);
-        ctx.beginPath();
-        ctx.arc(moonX, moonY, moon.radius, 0, Math.PI * 2);
-        ctx.fillStyle = "#bdc3c7";
-        ctx.fill();
-      }
-    }
+  if (gameState !== "moonRebuild" && gameState !== "exploding" && gameState !== "gameover") {
+    const moonX = planet.x + moon.orbitRadius * Math.cos(moon.angle);
+    const moonY = planet.y + moon.orbitRadius * Math.sin(moon.angle);
+    // Draw the moon image (using the custom Baren image).
+    ctx.drawImage(moonImg, moonX - moon.radius, moonY - moon.radius, moon.radius * 2, moon.radius * 2);
+  }
+}
+
 
     // Draw asteroids.
     function drawAsteroids() {
-      asteroids.forEach(asteroid => {
-        ctx.save();
-        ctx.translate(asteroid.x, asteroid.y);
-        ctx.rotate(asteroid.angle);
-        ctx.beginPath();
-        ctx.moveTo(asteroid.shape[0].x, asteroid.shape[0].y);
-        for (let i = 1; i < asteroid.shape.length; i++) {
-          ctx.lineTo(asteroid.shape[i].x, asteroid.shape[i].y);
-        }
-        ctx.closePath();
-        ctx.fillStyle = "#e74c3c";
-        ctx.fill();
-        ctx.restore();
-      });
-    }
+  asteroids.forEach(asteroid => {
+    ctx.save();
+    ctx.translate(asteroid.x, asteroid.y);
+    ctx.rotate(asteroid.angle);
+    // Draw the asteroid base image instead of a custom polygon.
+    ctx.drawImage(asteroidImg, -asteroid.radius, -asteroid.radius, asteroid.radius * 2, asteroid.radius * 2);
+    ctx.restore();
+  });
+}
+
 
     // Update asteroids.
     function updateAsteroids(deltaTime) {
