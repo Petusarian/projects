@@ -437,21 +437,25 @@
     function drawExplosions() {
   explosions.forEach(p => {
     const alpha = 1 - (p.elapsed / p.life);
-    const frameCount = 8;
-    // Make sure the explosion image has loaded before using its dimensions.
+    const frameCount = 8; // Assuming 8 frames in the sprite sheet.
     if (!explosionImg.complete) return;
     const frameWidth = explosionImg.width / frameCount;
-    // Calculate which frame to show based on elapsed time.
     let frame = Math.floor((p.elapsed / p.life) * frameCount);
     if (frame >= frameCount) frame = frameCount - 1;
     ctx.save();
     ctx.globalAlpha = alpha;
-    // Draw the selected frame; center the explosion at (p.x, p.y)
-    ctx.drawImage(explosionImg, frame * frameWidth, 0, frameWidth, explosionImg.height,
-                  p.x - frameWidth / 2, p.y - explosionImg.height / 2, frameWidth, explosionImg.height);
+    // Draw the selected explosion frame centered at (p.x, p.y)
+    ctx.drawImage(
+      explosionImg,
+      frame * frameWidth, 0, 
+      frameWidth, explosionImg.height,
+      p.x - frameWidth / 2, p.y - explosionImg.height / 2,
+      frameWidth, explosionImg.height
+    );
     ctx.restore();
   });
 }
+
 
     // Update stars.
     function updateStars(deltaTime) {
@@ -650,12 +654,19 @@
 
     // Draw asteroids.
     function drawAsteroids() {
+  const scaleFactor = 3; // Adjust this multiplier as needed.
   asteroids.forEach(asteroid => {
     ctx.save();
     ctx.translate(asteroid.x, asteroid.y);
     ctx.rotate(asteroid.angle);
-    // Draw the asteroid base image instead of a custom polygon.
-    ctx.drawImage(asteroidImg, -asteroid.radius, -asteroid.radius, asteroid.radius * 2, asteroid.radius * 2);
+    // Multiply the asteroid radius by scaleFactor for a larger image.
+    ctx.drawImage(
+      asteroidImg,
+      -asteroid.radius * scaleFactor, 
+      -asteroid.radius * scaleFactor, 
+      asteroid.radius * 2 * scaleFactor, 
+      asteroid.radius * 2 * scaleFactor
+    );
     ctx.restore();
   });
 }
