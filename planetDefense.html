@@ -170,12 +170,13 @@
       },
       // Upgrade costs.
       upgrades: {
-        restoreHealthCostPerPoint: 1,
+        restoreHealthCostPerPoint: 2,
+		 restoreShieldCostPerPoint: 3,
         increaseMaxHealthCost: 100,
         increaseMaxHealthBonus: 20,
-        buyShieldCost: 200,
+        buyShieldCost: 20,
         restoreShieldCost: 100,
-        buyCannonCost: 150
+        buyCannonCost: 15
       },
       // Cannon settings.
       cannon: {
@@ -199,7 +200,12 @@
 	
 	const explosionImg = new Image();
 	explosionImg.src = "assets/Asteroid 01 - Explode.png";
-
+	
+	const cannonImg = new Image();
+	cannonImg.src = "assets/cannon.png";
+cannonImg.onload = function() {
+  console.log("Cannon image loaded:", cannonImg.width, cannonImg.height);
+};
 	  
     /**************************************************************/
 
@@ -335,20 +341,21 @@
 
     // Shatter asteroid.
     function shatterAsteroid(asteroid) {
-  // Only trigger if not already exploding
+  // Only trigger if the asteroid isn't already exploding
   if (!asteroid.exploding) {
     shakeIntensity += config.shake.asteroidHit;
     score += 10;
     shards += 10;
-    // Slow down the asteroid but let it keep moving in its direction
+    // Slow down the asteroid while keeping its direction
     asteroid.vx *= 0.7;
     asteroid.vy *= 0.7;
-    // Mark as exploding and initialize the explosion timer
+    // Mark it as exploding and set the explosion duration (faster: 500ms)
     asteroid.exploding = true;
-    asteroid.explosionLife = 1000;  // Explosion lasts 1 second
-    asteroid.explosionElapsed = 0;  // Start the explosion timer at 0
+    asteroid.explosionLife = 500;  // in milliseconds
+    asteroid.explosionElapsed = 0; // reset timer
   }
 }
+
 
 
     // Explosion effect.
@@ -534,78 +541,114 @@
     }
 
     // Update cannons with exclusive targeting.
-    function updateCannons(deltaTime) {
-      if (shield && shield.cannons) {
-        shield.cannons.forEach(cannon => {
-          cannon.cooldown -= deltaTime;
-          const shieldRadius = planet.radius + shieldOffset;
-          cannon.x = planet.x + shieldRadius * Math.cos(cannon.angle);
-          cannon.y = planet.y + shieldRadius * Math.sin(cannon.angle);
-          if (cannon.cooldown <= 0) {
-            if (!cannon.target) {
-              let nearest = null;
-              let nearestDist = Infinity;
-              for (let i = 0; i < asteroids.length; i++) {
-                const a = asteroids[i];
-                let alreadyTargeted = false;
-                shield.cannons.forEach(other => {
-                  if (other !== cannon && other.target === a) {
-                    alreadyTargeted = true;
-                  }
-                });
-                if (alreadyTargeted) continue;
-                const dist = Math.hypot(cannon.x - a.x, cannon.y - a.y);
-                if (dist < config.cannon.range && dist < nearestDist) {
-                  nearest = a;
-                  nearestDist = dist;
-                }
-              }
-              if (nearest) {
-                cannon.target = nearest;
-                cannon.targetTime = 0;
-              }
-            } else {
-              cannon.targetTime += deltaTime;
-              if (cannon.targetTime >= config.cannon.targetingDelay) {
-                const dist = Math.hypot(cannon.x - cannon.target.x, cannon.y - cannon.target.y);
-                if (dist < config.cannon.range) {
-                  shatterAsteroid(cannon.target);
-                  for (let i = 0; i < asteroids.length; i++) {
-                    if (asteroids[i] === cannon.target) {
-                      asteroids.splice(i, 1);
-                      break;
-                    }
-                  }
-                  cannon.cooldown = config.cannon.cooldownTime;
-                }
-                cannon.target = null;
-              }
+    // Update the cannon's behavior each frame
+function updateCannons(deltaTime) {
+  if (shield && shield.cannons) {
+    shield.cannons.forEach(cannon => {
+      cannon.cooldown -= deltaTime;
+      const shieldRadius = planet.radius + shieldOffset;
+      cannon.x = planet.x + shieldRadius * Math.cos(cannon.angle);
+      cannon.y = planet.y + shieldRadius * Math.sin(cannon.angle);
+      
+      // If a target is assigned, rotate towards it and run the firing animation
+      if (cannon.target) {
+        // Calculate the angle from cannon position to target
+        let dx = cannon.target.x - cannon.x;
+        let dy = cannon.target.y - cannon.y;
+        // targetAngle is where the cannon should point so that its "up" (0°) is forward
+        let targetAngle = Math.atan2(dy, dx);
+        cannon.angle = targetAngle - Math.PI / 2;
+        
+        // If not already firing, start the firing animation.
+        if (cannon.state !== "firing") {
+          cannon.state = "firing";
+          cannon.animationFrame = 8; // idle frame (default)
+          cannon.animationTimer = 0;
+          cannon.fired = false;
+        }
+        cannon.animationTimer += deltaTime;
+        if (cannon.animationTimer >= cannon.animationInterval) {
+          cannon.animationTimer -= cannon.animationInterval;
+          // Toggle from frame 8 (idle) to frame 7 (firing)
+          if (cannon.animationFrame === 8) {
+            cannon.animationFrame = 7;
+            if (!cannon.fired) {
+              // Trigger the shot when switching to frame 7.
+              shatterAsteroid(cannon.target);
+              cannon.fired = true;
             }
+          } else {
+            // Reset animation and clear target.
+            cannon.animationFrame = 8;
+            cannon.state = "idle";
+            cannon.target = null;
           }
-        });
+        }
+      } else {
+        // If no target, remain idle.
+        cannon.state = "idle";
+        cannon.animationFrame = 8;
       }
-    }
-    function drawCannons() {
-      if (shield && shield.cannons) {
-        shield.cannons.forEach(cannon => {
-          ctx.save();
-          ctx.globalAlpha = (cannon.cooldown > 0) ? 0.5 : 1;
-          ctx.fillStyle = "#ff0";
-          ctx.beginPath();
-          ctx.arc(cannon.x, cannon.y, 5, 0, Math.PI * 2);
-          ctx.fill();
-          if (cannon.target && cannon.targetTime < config.cannon.targetingDelay) {
-            ctx.strokeStyle = "#ff0";
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(cannon.x, cannon.y);
-            ctx.lineTo(cannon.target.x, cannon.target.y);
-            ctx.stroke();
+      
+      // If cannon is off cooldown and has no target, try to acquire one.
+      if (cannon.cooldown <= 0 && !cannon.target) {
+        let nearest = null;
+        let nearestDist = Infinity;
+        for (let i = 0; i < asteroids.length; i++) {
+          const a = asteroids[i];
+          if (a.exploding) continue;  // Skip asteroids already exploding
+          let alreadyTargeted = false;
+          shield.cannons.forEach(other => {
+            if (other !== cannon && other.target === a) {
+              alreadyTargeted = true;
+            }
+          });
+          if (alreadyTargeted) continue;
+          const dist = Math.hypot(cannon.x - a.x, cannon.y - a.y);
+          if (dist < config.cannon.range && dist < nearestDist) {
+            nearest = a;
+            nearestDist = dist;
           }
-          ctx.restore();
-        });
+        }
+        if (nearest) {
+          cannon.target = nearest;
+          cannon.targetTime = 0;
+        }
       }
-    }
+    });
+  }
+}
+
+// Draw each cannon using the sprite sheet
+function drawCannons() {
+  if (shield && shield.cannons) {
+    shield.cannons.forEach(cannon => {
+      ctx.save();
+      // Move to the cannon's position
+      ctx.translate(cannon.x, cannon.y);
+      // Rotate the canvas so that the cannon's "up" points in its forward direction.
+      ctx.rotate(cannon.angle);
+      
+      // Draw the cannon sprite.
+      // Assume the cannon sprite sheet has 12 frames in a row.
+      const totalFrames = 12;
+      const frameWidth = cannonImg.width / totalFrames;
+      // Convert the current animation frame (which we set as 8 or 7) to a 0-based index:
+      const frameIndex = cannon.animationFrame - 1;
+      // Draw the frame centered on the cannon's position.
+      ctx.drawImage(
+        cannonImg,
+        frameIndex * frameWidth, 0, // source x, y
+        frameWidth, cannonImg.height, // source width and height
+        -frameWidth / 2, -cannonImg.height / 2, // destination x, y (centered)
+        frameWidth, cannonImg.height  // destination width and height
+      );
+      ctx.restore();
+    });
+  }
+}
+
+
 
     // Draw planet.
     function drawPlanet() {
@@ -650,21 +693,23 @@
 
     // Draw asteroids.
     function drawAsteroids() {
-  const scaleFactor = 3; // Adjust scale as needed
+  const scaleFactor = 3; // Adjust this multiplier as needed
   asteroids.forEach(asteroid => {
     ctx.save();
     ctx.translate(asteroid.x, asteroid.y);
     ctx.rotate(asteroid.angle);
     
     if (asteroid.exploding) {
-      // Use sprite sheet explosion effect
-      const frameCount = 8;
-      if (!explosionImg.complete) return;
+      // Draw explosion animation using sprite sheet
+      const frameCount = 8; // number of frames in your sprite sheet
+      if (!explosionImg.complete) return; // ensure image is loaded
       const frameWidth = explosionImg.width / frameCount;
+      // Determine which frame to display based on elapsed explosion time
       let frame = Math.floor((asteroid.explosionElapsed / asteroid.explosionLife) * frameCount);
       if (frame >= frameCount) frame = frameCount - 1;
       const alpha = 1 - (asteroid.explosionElapsed / asteroid.explosionLife);
       ctx.globalAlpha = alpha;
+      // Draw the appropriate frame centered on the asteroid
       ctx.drawImage(
         explosionImg,
         frame * frameWidth, 0,
@@ -673,7 +718,7 @@
         frameWidth, explosionImg.height
       );
     } else {
-      // Draw the asteroid normally (larger)
+      // Draw the asteroid normally (using your custom image)
       ctx.drawImage(
         asteroidImg,
         -asteroid.radius * scaleFactor,
@@ -688,25 +733,26 @@
 
 
 
+
     // Update asteroids.
     function updateAsteroids(deltaTime) {
   for (let i = asteroids.length - 1; i >= 0; i--) {
     const a = asteroids[i];
-    // Always update position and rotation
+    // Update position and rotation for all asteroids
     a.x += a.vx;
     a.y += a.vy;
     a.angle += a.angularVelocity;
     
     if (a.exploding) {
-      // Increment the explosion timer
+      // If exploding, advance the explosion timer
       a.explosionElapsed += deltaTime;
-      // Only remove the asteroid once the explosion duration has finished
+      // Remove asteroid only when explosion animation is done
       if (a.explosionElapsed >= a.explosionLife) {
         asteroids.splice(i, 1);
         continue;
       }
     } else {
-      // Normal removal when off-screen
+      // Normal off-screen removal
       if (a.x < -100 || a.x > WIDTH + 100 || a.y < -100 || a.y > HEIGHT + 100) {
         asteroids.splice(i, 1);
         continue;
@@ -714,6 +760,7 @@
     }
   }
 }
+
 
 
 
@@ -800,6 +847,8 @@
       }
       for (let i = asteroids.length - 1; i >= 0; i--) {
         const a = asteroids[i];
+		 // Skip collisions for asteroids already exploding.
+		if (a.exploding) continue;
         const distToPlanet = Math.hypot(a.x - planet.x, a.y - planet.y);
         // Shield collision.
         if (shield) {
@@ -856,56 +905,54 @@
 
     // Update cannons.
     function updateCannons(deltaTime) {
-      if (shield && shield.cannons) {
-        shield.cannons.forEach(cannon => {
-          cannon.cooldown -= deltaTime;
-          const shieldRadius = planet.radius + shieldOffset;
-          cannon.x = planet.x + shieldRadius * Math.cos(cannon.angle);
-          cannon.y = planet.y + shieldRadius * Math.sin(cannon.angle);
-          if (cannon.cooldown <= 0) {
-            if (!cannon.target) {
-              let nearest = null;
-              let nearestDist = Infinity;
-              for (let i = 0; i < asteroids.length; i++) {
-                const a = asteroids[i];
-                let alreadyTargeted = false;
-                shield.cannons.forEach(other => {
-                  if (other !== cannon && other.target === a) {
-                    alreadyTargeted = true;
-                  }
-                });
-                if (alreadyTargeted) continue;
-                const dist = Math.hypot(cannon.x - a.x, cannon.y - a.y);
-                if (dist < config.cannon.range && dist < nearestDist) {
-                  nearest = a;
-                  nearestDist = dist;
-                }
+  if (shield && shield.cannons) {
+    shield.cannons.forEach(cannon => {
+      cannon.cooldown -= deltaTime;
+      const shieldRadius = planet.radius + shieldOffset;
+      cannon.x = planet.x + shieldRadius * Math.cos(cannon.angle);
+      cannon.y = planet.y + shieldRadius * Math.sin(cannon.angle);
+      if (cannon.cooldown <= 0) {
+        if (!cannon.target) {
+          let nearest = null;
+          let nearestDist = Infinity;
+          for (let i = 0; i < asteroids.length; i++) {
+            const a = asteroids[i];
+            // Skip asteroids already exploding so they aren’t targeted again
+            if (a.exploding) continue;
+            let alreadyTargeted = false;
+            shield.cannons.forEach(other => {
+              if (other !== cannon && other.target === a) {
+                alreadyTargeted = true;
               }
-              if (nearest) {
-                cannon.target = nearest;
-                cannon.targetTime = 0;
-              }
-            } else {
-              cannon.targetTime += deltaTime;
-              if (cannon.targetTime >= config.cannon.targetingDelay) {
-                const dist = Math.hypot(cannon.x - cannon.target.x, cannon.y - cannon.target.y);
-                if (dist < config.cannon.range) {
-                  shatterAsteroid(cannon.target);
-                  for (let i = 0; i < asteroids.length; i++) {
-                    if (asteroids[i] === cannon.target) {
-                      asteroids.splice(i, 1);
-                      break;
-                    }
-                  }
-                  cannon.cooldown = config.cannon.cooldownTime;
-                }
-                cannon.target = null;
-              }
+            });
+            if (alreadyTargeted) continue;
+            const dist = Math.hypot(cannon.x - a.x, cannon.y - a.y);
+            if (dist < config.cannon.range && dist < nearestDist) {
+              nearest = a;
+              nearestDist = dist;
             }
           }
-        });
+          if (nearest) {
+            cannon.target = nearest;
+            cannon.targetTime = 0;
+          }
+        } else {
+          cannon.targetTime += deltaTime;
+          if (cannon.targetTime >= config.cannon.targetingDelay) {
+            const dist = Math.hypot(cannon.x - cannon.target.x, cannon.y - cannon.target.y);
+            if (dist < config.cannon.range) {
+              // Mark the target as exploding (do not splice it out here)
+              shatterAsteroid(cannon.target);
+              cannon.cooldown = config.cannon.cooldownTime;
+            }
+            cannon.target = null;
+          }
+        }
       }
-    }
+    });
+  }
+}
+
     function drawCannons() {
       if (shield && shield.cannons) {
         shield.cannons.forEach(cannon => {
@@ -1007,31 +1054,44 @@
       updateUpgradeMenu();
     }
     function updateUpgradeMenu() {
-      shardDisplay.innerHTML = `<p>Shards: ${shards}</p>`;
-      let optionsHTML = "";
-      const missingHealth = planetMaxHealth - planetHealth;
-      const restoreCost = missingHealth * config.upgrades.restoreHealthCostPerPoint;
-      optionsHTML += `<button onclick="upgradeRestoreHealth()">Restore Health (${restoreCost} Shards)</button><br>`;
-      optionsHTML += `<button onclick="upgradeIncreaseMaxHealth()">Increase Max Health (+${config.upgrades.increaseMaxHealthBonus}) (Cost: ${config.upgrades.increaseMaxHealthCost} Shards)</button><br>`;
-      if (!shield) {
-        optionsHTML += `<button onclick="upgradeBuyShield()">Buy Shield (Cost: ${config.upgrades.buyShieldCost} Shards)</button><br>`;
-      } else {
-        optionsHTML += `<button onclick="upgradeRestoreShield()">Restore Shield (Cost: ${config.upgrades.restoreShieldCost} Shards)</button><br>`;
-        optionsHTML += `<button onclick="upgradeBuyCannon()">Buy Cannon (Cost: ${config.upgrades.buyCannonCost} Shards)</button><br>`;
-      }
-      upgradeOptionsDiv.innerHTML = optionsHTML;
-    }
+  shardDisplay.innerHTML = `<p>Shards: ${shards}</p>`;
+  let optionsHTML = "";
+
+  // 1) Calculate missing planet health and cost.
+  const missingHealth = planetMaxHealth - planetHealth;
+  const restoreCost = Math.ceil(missingHealth * config.upgrades.restoreHealthCostPerPoint);
+  optionsHTML += `<button onclick="upgradeRestoreHealth()">Restore Health (${restoreCost} Shards)</button><br>`;
+
+  // 2) Increase Max Health cost is unchanged (example).
+  optionsHTML += `<button onclick="upgradeIncreaseMaxHealth()">Increase Max Health (+${config.upgrades.increaseMaxHealthBonus}) (Cost: ${config.upgrades.increaseMaxHealthCost} Shards)</button><br>`;
+
+  // 3) Shield-related buttons
+  if (!shield) {
+    optionsHTML += `<button onclick="upgradeBuyShield()">Buy Shield (Cost: ${config.upgrades.buyShieldCost} Shards)</button><br>`;
+  } else {
+    // Calculate missing shield health and cost
+    const missingShield = shield.maxHealth - shield.health;
+    const shieldRestoreCost = Math.ceil(missingShield * config.upgrades.restoreShieldCostPerPoint);
+    optionsHTML += `<button onclick="upgradeRestoreShield()">Restore Shield (${shieldRestoreCost} Shards)</button><br>`;
+
+    // Cannon purchase button (unchanged)
+    optionsHTML += `<button onclick="upgradeBuyCannon()">Buy Cannon (Cost: ${config.upgrades.buyCannonCost} Shards)</button><br>`;
+  }
+
+  upgradeOptionsDiv.innerHTML = optionsHTML;
+}
+
 
     // Upgrade functions.
     function upgradeRestoreHealth() {
-      const missingHealth = planetMaxHealth - planetHealth;
-      const cost = missingHealth * config.upgrades.restoreHealthCostPerPoint;
-      if (shards >= cost && missingHealth > 0) {
-        shards -= cost;
-        planetHealth = planetMaxHealth;
-        updateUpgradeMenu();
-      }
-    }
+  const missingHealth = planetMaxHealth - planetHealth;
+  const cost = Math.ceil(missingHealth * config.upgrades.restoreHealthCostPerPoint);
+  if (missingHealth > 0 && shards >= cost) {
+    shards -= cost;
+    planetHealth = planetMaxHealth;
+    updateUpgradeMenu();
+  }
+}
     function upgradeIncreaseMaxHealth() {
       if (shards >= config.upgrades.increaseMaxHealthCost) {
         shards -= config.upgrades.increaseMaxHealthCost;
@@ -1048,24 +1108,48 @@
       }
     }
     function upgradeRestoreShield() {
-      if (shield && shards >= config.upgrades.restoreShieldCost) {
-        shards -= config.upgrades.restoreShieldCost;
+  if (shield) {
+    const missingShield = shield.maxHealth - shield.health;
+    // If shield is already full, no cost needed
+    if (missingShield > 0) {
+      // Round up the cost to restore shield
+      const cost = Math.ceil(missingShield * config.upgrades.restoreShieldCostPerPoint);
+      if (shards >= cost) {
+        shards -= cost;
         shield.health = shield.maxHealth;
-        updateUpgradeMenu();
       }
     }
+    // Refresh the upgrade menu to show updated shards
+    updateUpgradeMenu();
+  }
+}
+
     function upgradeBuyCannon() {
-      if (shield && shards >= config.upgrades.buyCannonCost) {
-        shards -= config.upgrades.buyCannonCost;
-        const cannon = { angle: random(0, Math.PI * 2), cooldown: 0, x: 0, y: 0, target: null, targetTime: 0 };
-        shield.cannons.push(cannon);
-        const count = shield.cannons.length;
-        shield.cannons.forEach((c, i) => {
-          c.angle = (i / count) * Math.PI * 2;
-        });
-        updateUpgradeMenu();
-      }
-    }
+  if (shield && shards >= config.upgrades.buyCannonCost) {
+    shards -= config.upgrades.buyCannonCost;
+    const cannon = { 
+      angle: random(0, Math.PI * 2), 
+      cooldown: 0, 
+      x: 0, 
+      y: 0, 
+      target: null, 
+      targetTime: 0,
+      state: "idle",           // "idle" or "firing"
+      animationFrame: 8,       // Default stationary frame (1-indexed; frame 8)
+      animationTimer: 0,
+      animationInterval: 100,  // Time per frame in ms
+      fired: false             // Has the shot been triggered in this cycle?
+    };
+    shield.cannons.push(cannon);
+    const count = shield.cannons.length;
+    // Recalculate cannon angles for even distribution
+    shield.cannons.forEach((c, i) => {
+      c.angle = (i / count) * Math.PI * 2;
+    });
+    updateUpgradeMenu();
+  }
+}
+
 
     // Handle canvas clicks.
     canvas.addEventListener("click", function(e) {
@@ -1084,7 +1168,6 @@
       const a = asteroids[i];
       if (Math.hypot(clickX - a.x, clickY - a.y) < config.reticle.effectiveRadius) {
         shatterAsteroid(a);
-        asteroids.splice(i, 1);
         break;
       }
     }
