@@ -91,28 +91,27 @@
     <div class="tab" data-tab="pd">Planet Defense</div>
     <div class="tab" data-tab="space">Storm The House</div>
     <div class="tab" data-tab="tug">Tug of War</div>
-    
   </div>
   <div class="content">
+    <!-- Only the active tab loads its iframe immediately -->
     <div class="tab-content active" id="maze">
       <iframe src="mazeGame.html"></iframe>
     </div>
     <div class="tab-content" id="cos">
-      <iframe src="cosmuncher.html"></iframe>
+      <iframe data-src="cosmuncher.html"></iframe>
     </div>
     <div class="tab-content" id="itc">
-      <iframe src="intoTheCircle.html"></iframe>
+      <iframe data-src="intoTheCircle.html"></iframe>
     </div>
     <div class="tab-content" id="pd">
-      <iframe src="planetDefense.html"></iframe>
+      <iframe data-src="planetDefense.html"></iframe>
     </div>
     <div class="tab-content" id="space">
-      <iframe src="stormTheHouse.html"></iframe>
+      <iframe data-src="stormTheHouse.html"></iframe>
     </div>
     <div class="tab-content" id="tug">
-      <iframe src="tugOfWargame.html"></iframe>
+      <iframe data-src="tugOfWargame.html"></iframe>
     </div>
-    
   </div>
   
   <script>
@@ -129,7 +128,14 @@
         
         // Add active class to clicked tab and its corresponding content
         tab.classList.add('active');
-        document.getElementById(tab.getAttribute('data-tab')).classList.add('active');
+        const content = document.getElementById(tab.getAttribute('data-tab'));
+        content.classList.add('active');
+        
+        // If the iframe hasn't been loaded yet, load it from the data-src attribute
+        const iframe = content.querySelector('iframe');
+        if (!iframe.getAttribute('src') && iframe.dataset.src) {
+          iframe.setAttribute('src', iframe.dataset.src);
+        }
       });
     });
   </script>
