@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Endless Cave Rooms – Organic Endless Maze (Spawn Buffer)</title>
+  <title>Endless Cave Rooms – Organic Endless Maze (Safe Spawn & Smooth Bounce)</title>
   <style>
     /* Responsive container following your project’s style */
     body {
@@ -23,8 +23,8 @@
     }
     canvas {
       display: block;
-      background: #111;
-      border: 2px solid #2E3B55;
+      background: #000712;
+      border: 2px solid #1A1F3B;
     }
   </style>
 </head>
@@ -52,7 +52,7 @@
       extraCorridorChance: 0.3,
       
       // Player Options
-      // (playerStartCell will be overridden for chunk (0,0) with a buffer check)
+      // (playerStartCell will be overridden for chunk (0,0))
       playerStartCell: { x: 1.5, y: 1.5 },
       playerRadiusFactor: 0.2,
       playerMaxSpeed: 1,
@@ -67,11 +67,11 @@
       
       // Fog of War Options
       fogAdjacentAlpha: 0.5,
-      fogDarkAlpha: 0.99,
+      fogDarkAlpha: 1.0,
       
       // Visual Options (colors)
       wallColor: "#2E3B55",
-      fogColor: "0, 0, 0",
+      fogColor: "#1A1F3B", // Use a hex color code for fog
       playerColor: "#f0f0f0"
     };
 
@@ -90,9 +90,8 @@
     const VIEW_HEIGHT = canvas.height;
 
     /****************** ENDLESS CAVE GENERATION FUNCTIONS ******************/
+    // Generation system remains unchanged
     const chunks = {};
-
-    // 1 = floor, 0 = wall
     function iterateCave(grid) {
       const rows = grid.length, cols = grid[0].length;
       const newGrid = [];
@@ -115,7 +114,6 @@
       }
       return newGrid;
     }
-
     function floodFill(grid, startR, startC, visited) {
       const rows = grid.length, cols = grid[0].length;
       const cells = [];
@@ -126,9 +124,9 @@
         cells.push({ r, c });
         for (let dr = -1; dr <= 1; dr++) {
           for (let dc = -1; dc <= 1; dc++) {
-            if (Math.abs(dr) + Math.abs(dc) !== 1) continue; // 4-connected
+            if (Math.abs(dr) + Math.abs(dc) !== 1) continue;
             let nr = r + dr, nc = c + dc;
-            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && !visited[nr + "," + nc] && grid[nr][nc] === 1) {
+            if (nr >= 0 && nr < grid.length && nc >= 0 && nc < grid[0].length && !visited[nr + "," + nc] && grid[nr][nc] === 1) {
               visited[nr + "," + nc] = true;
               queue.push({ r: nr, c: nc });
             }
@@ -137,7 +135,6 @@
       }
       return cells;
     }
-
     function findRooms(grid) {
       const rows = grid.length, cols = grid[0].length;
       const visited = {};
@@ -157,44 +154,9 @@
       }
       return rooms;
     }
-
-    // Minimal spanning tree (Prim's) to connect rooms.
-    function connectRoomsMST(rooms, grid) {
-      if (rooms.length === 0) return;
-      const connected = [ rooms[0] ];
-      const remaining = rooms.slice(1);
-
-      while (remaining.length > 0) {
-        let bestDist = Infinity, bestIndex = -1, bestA = null, bestB = null;
-        for (const rA of connected) {
-          for (let i = 0; i < remaining.length; i++) {
-            const rB = remaining[i];
-            const d = Math.hypot(rA.center.x - rB.center.x, rA.center.y - rB.center.y);
-            if (d < bestDist) {
-              bestDist = d;
-              bestIndex = i;
-              bestA = rA;
-              bestB = rB;
-            }
-          }
-        }
-        if (bestB) {
-          // L-shaped corridor
-          for (let c = Math.min(bestA.center.x, bestB.center.x); c <= Math.max(bestA.center.x, bestB.center.x); c++) {
-            grid[bestA.center.y][c] = 1;
-          }
-          for (let r = Math.min(bestA.center.y, bestB.center.y); r <= Math.max(bestA.center.y, bestB.center.y); r++) {
-            grid[r][bestB.center.x] = 1;
-          }
-          connected.push(remaining.splice(bestIndex, 1)[0]);
-        }
-      }
-    }
-
     function generateChunk(cx, cy) {
       const rows = config.chunkRows;
       const cols = config.chunkCols;
-      // Initialize random grid
       let grid = [];
       for (let r = 0; r < rows; r++) {
         grid[r] = [];
@@ -202,15 +164,41 @@
           grid[r][c] = (Math.random() < config.fillProbability) ? 1 : 0;
         }
       }
-      // Automata
       for (let i = 0; i < config.automataIterations; i++) {
         grid = iterateCave(grid);
       }
-      // Find rooms
       const rooms = findRooms(grid);
-      // Connect with MST
-      connectRoomsMST(rooms, grid);
-      // Extra corridors
+      // Connect rooms using Prim’s algorithm.
+      if (rooms.length > 0) {
+        const connected = [];
+        const remaining = [...rooms];
+        connected.push(remaining.shift());
+        while (remaining.length > 0) {
+          let best = null, bestDist = Infinity, bestIndex = -1;
+          for (const r1 of connected) {
+            for (let i = 0; i < remaining.length; i++) {
+              const r2 = remaining[i];
+              const d = Math.hypot(r1.center.x - r2.center.x, r1.center.y - r2.center.y);
+              if (d < bestDist) {
+                bestDist = d;
+                best = { a: r1, b: r2 };
+                bestIndex = i;
+              }
+            }
+          }
+          if (best) {
+            let a = best.a.center, b = best.b.center;
+            for (let c = Math.min(a.x, b.x); c <= Math.max(a.x, b.x); c++) {
+              grid[a.y][c] = 1;
+            }
+            for (let r = Math.min(a.y, b.y); r <= Math.max(a.y, b.y); r++) {
+              grid[r][b.x] = 1;
+            }
+            connected.push(remaining.splice(bestIndex, 1)[0]);
+          }
+        }
+      }
+      // Extra random corridors.
       for (let i = 0; i < rooms.length; i++) {
         if (Math.random() < config.extraCorridorChance && rooms.length > 1) {
           let j = Math.floor(Math.random() * rooms.length);
@@ -224,7 +212,7 @@
           }
         }
       }
-      // Force openings on boundaries
+      // Force openings on boundaries.
       const midRow = Math.floor(rows / 2);
       const midCol = Math.floor(cols / 2);
       grid[midRow][0] = 1;
@@ -234,7 +222,6 @@
       
       return { grid, rooms };
     }
-
     function getChunk(cx, cy) {
       const key = cx + "," + cy;
       if (!chunks[key]) {
@@ -242,7 +229,6 @@
       }
       return chunks[key];
     }
-
     function getCell(gx, gy) {
       const cx = Math.floor(gx / config.chunkCols);
       const cy = Math.floor(gy / config.chunkRows);
@@ -254,12 +240,10 @@
     }
 
     /****************** PLAYER SETUP & SMOOTH MOVEMENT ******************/
-    // Attempt to find a "buffered" floor cell: a cell that is floor
-    // and all 8 neighbors are also floor, ensuring at least 1 cell away from walls.
+    // Ensure player starts in a room in chunk (0,0) with a 1-cell buffer.
+    const chunk00 = getChunk(0, 0);
     function isBufferedFloor(grid, r, c) {
-      // Must be floor itself
       if (grid[r][c] !== 1) return false;
-      // Check neighbors
       for (let dr = -1; dr <= 1; dr++) {
         for (let dc = -1; dc <= 1; dc++) {
           let nr = r + dr, nc = c + dc;
@@ -269,15 +253,9 @@
       }
       return true;
     }
-
-    // Find a floor cell with a 1-cell buffer from walls in chunk(0,0).
-    // If none found, fallback to normal room center or first floor cell.
     function findSpawnCell() {
-      const chunk00 = getChunk(0, 0);
       const grid = chunk00.grid;
-      const rows = grid.length;
-      const cols = grid[0].length;
-      // Try buffered floor search
+      const rows = grid.length, cols = grid[0].length;
       for (let r = 1; r < rows - 1; r++) {
         for (let c = 1; c < cols - 1; c++) {
           if (isBufferedFloor(grid, r, c)) {
@@ -285,29 +263,22 @@
           }
         }
       }
-      // If no buffered floor found, fallback to the center of the first room or any floor cell
+      // Fallback to first room's center or any floor cell
       if (chunk00.rooms && chunk00.rooms.length > 0) {
         const center = chunk00.rooms[0].center;
         if (grid[center.y][center.x] === 1) {
           return center;
         }
       }
-      // Otherwise, scan for any floor cell
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
-          if (grid[r][c] === 1) {
-            return { x: c, y: r };
-          }
+          if (grid[r][c] === 1) return { x: c, y: r };
         }
       }
-      // If everything fails, fallback
       return { x: 1, y: 1 };
     }
-
-    // Actually pick the spawn
     const spawn = findSpawnCell();
     config.playerStartCell = spawn;
-    
     const player = {
       x: config.cellSize * config.playerStartCell.x,
       y: config.cellSize * config.playerStartCell.y,
@@ -396,7 +367,8 @@
       
       for (let gy = cellTop; gy <= cellBottom; gy++) {
         for (let gx = cellLeft; gx <= cellRight; gx++) {
-          if (vis[gy + "," + gx]) continue;
+          let key = gy + "," + gx;
+          if (vis[key]) continue;
           let adjacentVisible = false;
           for (let dy = -1; dy <= 1; dy++) {
             for (let dx = -1; dx <= 1; dx++) {
@@ -409,8 +381,11 @@
             if (adjacentVisible) break;
           }
           let alpha = adjacentVisible ? config.fogAdjacentAlpha : config.fogDarkAlpha;
-          ctx.fillStyle = "rgba(" + config.fogColor + ", " + alpha + ")";
+          ctx.save();
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = config.fogColor; // now using a color code (e.g., "#000000")
           ctx.fillRect(gx * config.cellSize, gy * config.cellSize, config.cellSize, config.cellSize);
+          ctx.restore();
         }
       }
     }
@@ -508,7 +483,6 @@
         ctx.fill();
         ctx.restore();
       } else {
-        // Stationary: smoothly damp bounce to zero
         ctx.fillStyle = config.playerColor;
         ctx.beginPath();
         ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
