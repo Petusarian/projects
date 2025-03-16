@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Endless Cave Rooms – Organic Endless Maze (Spawn Buffer)</title>
+  <style>
+    /* Responsive container following your project’s style */
+    body {
+      margin: 0;
+      background: #1A1F3B;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      overflow: hidden;
+    }
+    #container {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      width: 1280px;
+      height: 720px;
+      background: #1A1F3B;
+      transform: translateX(-50%) scale(var(--scale, 1));
+      transform-origin: center top;
+    }
+    canvas {
+      display: block;
+      background: #111;
+      border: 2px solid #2E3B55;
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <canvas id="gameCanvas" width="1280" height="720"></canvas>
+  </div>
+  <script>
+    /****************** CONFIGURABLE OPTIONS ******************/
+    const config = {
+      // Maze & World Options
+      chunkCols: 35,
+      chunkRows: 35,
+      cellSize: 64,
+      
+      // Cave Generation Options
+      fillProbability: 0.45,
+      automataIterations: 4,
+      floorThreshold: 5,
+      
+      // Room Filtering Options
+      minRoomSize: 20,
+      
+      // Corridor Connection Options
+      extraCorridorChance: 0.3,
+      
+      // Player Options
+      // (playerStartCell will be overridden for chunk (0,0) with a buffer check)
+      playerStartCell: { x: 1.5, y: 1.5 },
+      playerRadiusFactor: 0.2,
+      playerMaxSpeed: 1,
+      accel: 0.2,
+      friction: 0.9,
+      
+      // Sprint Options
+      sprintMultiplier: 2,
+      
+      // Camera Options
+      zoom: 1.0,
+      
+      // Fog of War Options
+      fogAdjacentAlpha: 0.5,
+      fogDarkAlpha: 0.99,
+      
+      // Visual Options (colors)
+      wallColor: "#2E3B55",
+      fogColor: "0, 0, 0",
+      playerColor: "#f0f0f0"
+    };
+
+    /****************** RESPONSIVE SCALING ******************/
+    function updateScale() {
+      const scale = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
+      document.documentElement.style.setProperty('--scale', scale);
+    }
+    window.addEventListener('resize', updateScale);
+    updateScale();
+
+    /****************** CANVAS SETUP ******************/
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const VIEW_WIDTH = canvas.width;
+    const VIEW_HEIGHT = canvas.height;
+
+    /****************** ENDLESS CAVE GENERATION FUNCTIONS ******************/
+    const chunks = {};
+
+    // 1 = floor, 0 = wall
+    function iterateCave(grid) {
+      const rows = grid.length, cols = grid[0].length;
+      const newGrid = [];
+      for (let r = 0; r < rows; r++) {
+        newGrid[r] = [];
+        for (let c = 0; c < cols; c++) {
+          let floorCount = 0;
+          for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+              let nr = r + dr, nc = c + dc;
+              if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) {
+                floorCount++;
+              } else if (grid[nr][nc] === 1) {
+                floorCount++;
+              }
+            }
+          }
+          newGrid[r][c] = (floorCount >= config.floorThreshold) ? 1 : 0;
+        }
+      }
+      return newGrid;
+    }
+
+    function floodFill(grid, startR, startC, visited) {
+      const rows = grid.length, cols = grid[0].length;
+      const cells = [];
+      const queue = [{ r: startR, c: startC }];
+      visited[startR + "," + startC] = true;
+      while (queue.length) {
+        const { r, c } = queue.shift();
+        cells.push({ r, c });
+        for (let dr = -1; dr <= 1; dr++) {
+          for (let dc = -1; dc <= 1; dc++) {
+            if (Math.abs(dr) + Math.abs(dc) !== 1) continue; // 4-connected
+            let nr = r + dr, nc = c + dc;
+            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && !visited[nr + "," + nc] && grid[nr][nc] === 1) {
+              visited[nr + "," + nc] = true;
+              queue.push({ r: nr, c: nc });
+            }
+          }
+        }
+      }
+      return cells;
+    }
+
+    function findRooms(grid) {
+      const rows = grid.length, cols = grid[0].length;
+      const visited = {};
+      const rooms = [];
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (grid[r][c] === 1 && !visited[r + "," + c]) {
+            const region = floodFill(grid, r, c, visited);
+            if (region.length >= config.minRoomSize) {
+              let sumR = 0, sumC = 0;
+              region.forEach(cell => { sumR += cell.r; sumC += cell.c; });
+              const center = { x: Math.floor(sumC / region.length), y: Math.floor(sumR / region.length) };
+              rooms.push({ cells: region, center });
+            }
+          }
+        }
+      }
+      return rooms;
+    }
+
+    // Minimal spanning tree (Prim's) to connect rooms.
+    function connectRoomsMST(rooms, grid) {
+      if (rooms.length === 0) return;
+      const connected = [ rooms[0] ];
+      const remaining = rooms.slice(1);
+
+      while (remaining.length > 0) {
+        let bestDist = Infinity, bestIndex = -1, bestA = null, bestB = null;
+        for (const rA of connected) {
+          for (let i = 0; i < remaining.length; i++) {
+            const rB = remaining[i];
+            const d = Math.hypot(rA.center.x - rB.center.x, rA.center.y - rB.center.y);
+            if (d < bestDist) {
+              bestDist = d;
+              bestIndex = i;
+              bestA = rA;
+              bestB = rB;
+            }
+          }
+        }
+        if (bestB) {
+          // L-shaped corridor
+          for (let c = Math.min(bestA.center.x, bestB.center.x); c <= Math.max(bestA.center.x, bestB.center.x); c++) {
+            grid[bestA.center.y][c] = 1;
+          }
+          for (let r = Math.min(bestA.center.y, bestB.center.y); r <= Math.max(bestA.center.y, bestB.center.y); r++) {
+            grid[r][bestB.center.x] = 1;
+          }
+          connected.push(remaining.splice(bestIndex, 1)[0]);
+        }
+      }
+    }
+
+    function generateChunk(cx, cy) {
+      const rows = config.chunkRows;
+      const cols = config.chunkCols;
+      // Initialize random grid
+      let grid = [];
+      for (let r = 0; r < rows; r++) {
+        grid[r] = [];
+        for (let c = 0; c < cols; c++) {
+          grid[r][c] = (Math.random() < config.fillProbability) ? 1 : 0;
+        }
+      }
+      // Automata
+      for (let i = 0; i < config.automataIterations; i++) {
+        grid = iterateCave(grid);
+      }
+      // Find rooms
+      const rooms = findRooms(grid);
+      // Connect with MST
+      connectRoomsMST(rooms, grid);
+      // Extra corridors
+      for (let i = 0; i < rooms.length; i++) {
+        if (Math.random() < config.extraCorridorChance && rooms.length > 1) {
+          let j = Math.floor(Math.random() * rooms.length);
+          if (j === i) j = (j + 1) % rooms.length;
+          const a = rooms[i].center, b = rooms[j].center;
+          for (let c = Math.min(a.x, b.x); c <= Math.max(a.x, b.x); c++) {
+            grid[a.y][c] = 1;
+          }
+          for (let r = Math.min(a.y, b.y); r <= Math.max(a.y, b.y); r++) {
+            grid[r][b.x] = 1;
+          }
+        }
+      }
+      // Force openings on boundaries
+      const midRow = Math.floor(rows / 2);
+      const midCol = Math.floor(cols / 2);
+      grid[midRow][0] = 1;
+      grid[midRow][cols - 1] = 1;
+      grid[0][midCol] = 1;
+      grid[rows - 1][midCol] = 1;
+      
+      return { grid, rooms };
+    }
+
+    function getChunk(cx, cy) {
+      const key = cx + "," + cy;
+      if (!chunks[key]) {
+        chunks[key] = generateChunk(cx, cy);
+      }
+      return chunks[key];
+    }
+
+    function getCell(gx, gy) {
+      const cx = Math.floor(gx / config.chunkCols);
+      const cy = Math.floor(gy / config.chunkRows);
+      const chunkData = getChunk(cx, cy);
+      let cellX = gx - cx * config.chunkCols;
+      let cellY = gy - cy * config.chunkRows;
+      if (cellX < 0 || cellX >= config.chunkCols || cellY < 0 || cellY >= config.chunkRows) return 0;
+      return chunkData.grid[cellY][cellX];
+    }
+
+    /****************** PLAYER SETUP & SMOOTH MOVEMENT ******************/
+    // Attempt to find a "buffered" floor cell: a cell that is floor
+    // and all 8 neighbors are also floor, ensuring at least 1 cell away from walls.
+    function isBufferedFloor(grid, r, c) {
+      // Must be floor itself
+      if (grid[r][c] !== 1) return false;
+      // Check neighbors
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          let nr = r + dr, nc = c + dc;
+          if (nr < 0 || nr >= grid.length || nc < 0 || nc >= grid[0].length) return false;
+          if (grid[nr][nc] !== 1) return false;
+        }
+      }
+      return true;
+    }
+
+    // Find a floor cell with a 1-cell buffer from walls in chunk(0,0).
+    // If none found, fallback to normal room center or first floor cell.
+    function findSpawnCell() {
+      const chunk00 = getChunk(0, 0);
+      const grid = chunk00.grid;
+      const rows = grid.length;
+      const cols = grid[0].length;
+      // Try buffered floor search
+      for (let r = 1; r < rows - 1; r++) {
+        for (let c = 1; c < cols - 1; c++) {
+          if (isBufferedFloor(grid, r, c)) {
+            return { x: c, y: r };
+          }
+        }
+      }
+      // If no buffered floor found, fallback to the center of the first room or any floor cell
+      if (chunk00.rooms && chunk00.rooms.length > 0) {
+        const center = chunk00.rooms[0].center;
+        if (grid[center.y][center.x] === 1) {
+          return center;
+        }
+      }
+      // Otherwise, scan for any floor cell
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (grid[r][c] === 1) {
+            return { x: c, y: r };
+          }
+        }
+      }
+      // If everything fails, fallback
+      return { x: 1, y: 1 };
+    }
+
+    // Actually pick the spawn
+    const spawn = findSpawnCell();
+    config.playerStartCell = spawn;
+    
+    const player = {
+      x: config.cellSize * config.playerStartCell.x,
+      y: config.cellSize * config.playerStartCell.y,
+      radius: config.cellSize * config.playerRadiusFactor,
+      vx: 0,
+      vy: 0,
+      maxSpeed: config.playerMaxSpeed
+    };
+
+    /****************** INPUT HANDLING ******************/
+    const keys = {};
+    window.addEventListener("keydown", e => { keys[e.key.toLowerCase()] = true; });
+    window.addEventListener("keyup", e => { keys[e.key.toLowerCase()] = false; });
+
+    /****************** COLLISION DETECTION ******************/
+    function isWall(x, y) {
+      const gx = Math.floor(x / config.cellSize);
+      const gy = Math.floor(y / config.cellSize);
+      return getCell(gx, gy) === 0;
+    }
+    function willCollide(newX, newY) {
+      const samples = 8;
+      for (let i = 0; i < samples; i++) {
+        const angle = (i / samples) * 2 * Math.PI;
+        const sampleX = newX + player.radius * Math.cos(angle);
+        const sampleY = newY + player.radius * Math.sin(angle);
+        if (isWall(sampleX, sampleY)) return true;
+      }
+      return false;
+    }
+
+    /****************** CAMERA OPTIONS ******************/
+    const zoom = config.zoom;
+
+    /****************** LINE-OF-SIGHT (BRESENHAM) ******************/
+    function hasLineOfSight(x1, y1, x2, y2) {
+      let sx = Math.floor(x1 / config.cellSize);
+      let sy = Math.floor(y1 / config.cellSize);
+      let ex = Math.floor(x2 / config.cellSize);
+      let ey = Math.floor(y2 / config.cellSize);
+      let dx = Math.abs(ex - sx);
+      let dy = Math.abs(ey - sy);
+      let x = sx, y = sy;
+      let n = 1 + dx + dy;
+      let x_inc = (ex > sx) ? 1 : -1;
+      let y_inc = (ey > sy) ? 1 : -1;
+      let error = dx - dy;
+      dx *= 2;
+      dy *= 2;
+      for (; n > 0; n--) {
+        if ((x !== sx || y !== sy) && getCell(x, y) === 0) {
+          return false;
+        }
+        if (error > 0) {
+          x += x_inc;
+          error -= dy;
+        } else {
+          y += y_inc;
+          error += dx;
+        }
+      }
+      return true;
+    }
+
+    /****************** FOG OF WAR – LIMITED FADING ******************/
+    function drawFog() {
+      const halfViewW = VIEW_WIDTH / (2 * zoom);
+      const halfViewH = VIEW_HEIGHT / (2 * zoom);
+      const left = player.x - halfViewW;
+      const top = player.y - halfViewH;
+      const right = player.x + halfViewW;
+      const bottom = player.y + halfViewH;
+      const cellLeft = Math.floor(left / config.cellSize);
+      const cellTop = Math.floor(top / config.cellSize);
+      const cellRight = Math.floor(right / config.cellSize);
+      const cellBottom = Math.floor(bottom / config.cellSize);
+      
+      const vis = {};
+      for (let gy = cellTop; gy <= cellBottom; gy++) {
+        for (let gx = cellLeft; gx <= cellRight; gx++) {
+          let centerX = gx * config.cellSize + config.cellSize / 2;
+          let centerY = gy * config.cellSize + config.cellSize / 2;
+          vis[gy + "," + gx] = hasLineOfSight(player.x, player.y, centerX, centerY);
+        }
+      }
+      
+      for (let gy = cellTop; gy <= cellBottom; gy++) {
+        for (let gx = cellLeft; gx <= cellRight; gx++) {
+          if (vis[gy + "," + gx]) continue;
+          let adjacentVisible = false;
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              if (dx === 0 && dy === 0) continue;
+              if (vis[(gy + dy) + "," + (gx + dx)]) {
+                adjacentVisible = true;
+                break;
+              }
+            }
+            if (adjacentVisible) break;
+          }
+          let alpha = adjacentVisible ? config.fogAdjacentAlpha : config.fogDarkAlpha;
+          ctx.fillStyle = "rgba(" + config.fogColor + ", " + alpha + ")";
+          ctx.fillRect(gx * config.cellSize, gy * config.cellSize, config.cellSize, config.cellSize);
+        }
+      }
+    }
+
+    /****************** SMOOTH BOUNCE INTERPOLATION ******************/
+    let currentBounce = 0;
+    function lerp(a, b, t) {
+      return a + (b - a) * t;
+    }
+
+    /****************** GAME LOOP & MOVEMENT ******************/
+    function update() {
+      const sprint = keys["shift"] ? config.sprintMultiplier : 1;
+      
+      if (keys["w"]) player.vy -= config.accel * sprint;
+      if (keys["s"]) player.vy += config.accel * sprint;
+      if (keys["a"]) player.vx -= config.accel * sprint;
+      if (keys["d"]) player.vx += config.accel * sprint;
+      
+      const effectiveMaxSpeed = player.maxSpeed * sprint;
+      const speed = Math.hypot(player.vx, player.vy);
+      if (speed > effectiveMaxSpeed) {
+        player.vx = (player.vx / speed) * effectiveMaxSpeed;
+        player.vy = (player.vy / speed) * effectiveMaxSpeed;
+      }
+      
+      player.vx *= config.friction;
+      player.vy *= config.friction;
+      
+      const newX = player.x + player.vx;
+      if (!willCollide(newX, player.y)) {
+        player.x = newX;
+      } else {
+        player.vx = 0;
+      }
+      const newY = player.y + player.vy;
+      if (!willCollide(player.x, newY)) {
+        player.y = newY;
+      } else {
+        player.vy = 0;
+      }
+    }
+
+    function drawWorld() {
+      const halfViewW = VIEW_WIDTH / (2 * zoom);
+      const halfViewH = VIEW_HEIGHT / (2 * zoom);
+      const left = player.x - halfViewW;
+      const top = player.y - halfViewH;
+      const right = player.x + halfViewW;
+      const bottom = player.y + halfViewH;
+      const cellLeft = Math.floor(left / config.cellSize);
+      const cellTop = Math.floor(top / config.cellSize);
+      const cellRight = Math.floor(right / config.cellSize);
+      const cellBottom = Math.floor(bottom / config.cellSize);
+      for (let gy = cellTop; gy <= cellBottom; gy++) {
+        for (let gx = cellLeft; gx <= cellRight; gx++) {
+          if (getCell(gx, gy) === 0) {
+            const wx = gx * config.cellSize;
+            const wy = gy * config.cellSize;
+            ctx.fillStyle = config.wallColor;
+            ctx.fillRect(wx, wy, config.cellSize, config.cellSize);
+          }
+        }
+      }
+    }
+
+    function drawPlayer() {
+      const speed = Math.hypot(player.vx, player.vy);
+      let targetBounce = 0;
+      let baseHScale = 1, baseVScale = 1;
+      if (speed > 0.01) {
+        if (keys["shift"]) {
+          targetBounce = 0.1 * Math.sin(performance.now() / 100);
+          baseHScale = 1.2;
+          baseVScale = 0.8;
+        } else {
+          targetBounce = 0.03 * Math.sin(performance.now() / 200);
+          baseHScale = 1.0;
+          baseVScale = 1.0;
+        }
+      }
+      currentBounce = lerp(currentBounce, targetBounce, 0.1);
+      let hScale = baseHScale + currentBounce;
+      let vScale = baseVScale - currentBounce;
+      
+      if (speed > 0.01) {
+        let angle = Math.atan2(player.vy, player.vx);
+        ctx.save();
+        ctx.translate(player.x, player.y);
+        ctx.rotate(angle);
+        ctx.scale(hScale, vScale);
+        ctx.beginPath();
+        ctx.arc(0, 0, player.radius, 0, Math.PI * 2);
+        ctx.fillStyle = config.playerColor;
+        ctx.fill();
+        ctx.restore();
+      } else {
+        // Stationary: smoothly damp bounce to zero
+        ctx.fillStyle = config.playerColor;
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function gameLoop() {
+      update();
+      ctx.clearRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+      ctx.save();
+      ctx.translate(VIEW_WIDTH / 2, VIEW_HEIGHT / 2);
+      ctx.scale(zoom, zoom);
+      ctx.translate(-player.x, -player.y);
+      drawWorld();
+      drawPlayer();
+      drawFog();
+      ctx.restore();
+      requestAnimationFrame(gameLoop);
+    }
+    requestAnimationFrame(gameLoop);
+  </script>
+</body>
+</html>
